@@ -1,0 +1,228 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-07-30 22:49:46",
+  "issue": "211",
+  "source_hashes": {
+    "crawler.py": "de5ba2256cfb92346430588c3bf03d7e10f6c6bd5c6637bd8e47dcc221efda7a",
+    "staging_crawler.py": "de5e89ad6e1305531919fc178f7130f62515c4edb36b6f4c473e51747c7753d5",
+    "targets.json": "23f2bb7347b774d977670377088aaf061f20629b57fa62261fcb3fb9f744e536",
+    "recent_10_cache.json": "4e51547dc0fcf7c878b56d87c1b12c0d7a706510f69543837e6ea52da4477100"
+  },
+  "target_count": 190,
+  "cache_record_count": 1449,
+  "representatives": [
+    {
+      "source_kind": "static_topic",
+      "name": "八方聚宝",
+      "target": {
+        "url": "https://bbs03.836386.cyou/bbs/topic.php?id=16486",
+        "name": "八方聚宝",
+        "keywords": [
+          "绝杀5码",
+          "绝杀五码"
+        ],
+        "count": 5,
+        "region": "bottom",
+        "anchor": "作者:八方聚宝",
+        "first_issue_chain": true
+      },
+      "fixture": "static_topic__八方聚宝.txt",
+      "fixture_sha256": "6901510c5e8df27c7b7c281acb875300e3666f8ae2474fdc08f02d3a170c806a",
+      "expected": {
+        "name": "八方聚宝",
+        "url": "https://bbs03.836386.cyou/bbs/topic.php?id=16486",
+        "issue": "211",
+        "numbers": [
+          "06",
+          "09",
+          "13",
+          "20",
+          "24"
+        ]
+      }
+    },
+    {
+      "source_kind": "decoded_script",
+      "name": "天朗气清",
+      "target": {
+        "url": "https://scbnsyz.3dl0e-87g6y-coruzs.xyz:16677/topic/478884.html",
+        "name": "天朗气清",
+        "keywords": [
+          "五码",
+          "5码"
+        ],
+        "count": 5,
+        "region": "bottom",
+        "anchor": "天朗气清 发表于",
+        "decoded_anchor_only": "天朗气清 发表于",
+        "decoded_anchor_to_end": true
+      },
+      "fixture": "decoded_script__天朗气清.txt",
+      "fixture_sha256": "d42f15e740918cca75599df57183c0c488c9b425421a58ea1bc134324c1062d7",
+      "expected": {
+        "name": "天朗气清",
+        "url": "https://scbnsyz.3dl0e-87g6y-coruzs.xyz:16677/topic/478884.html",
+        "issue": "211",
+        "numbers": [
+          "16",
+          "08",
+          "47",
+          "19",
+          "31"
+        ]
+      }
+    },
+    {
+      "source_kind": "dynamic_article_admin",
+      "name": "赢遍天下",
+      "target": {
+        "url": "https://ifnkblf.e4kce-krr7o-vuvqhd.work:29411/article/admin/6a3c7be8018539c611cc62d7?url=scyd",
+        "name": "赢遍天下",
+        "keywords": [
+          "五码",
+          "5码"
+        ],
+        "count": 5,
+        "region": "bottom",
+        "anchor": "赢遍天下",
+        "first_issue_chain": true
+      },
+      "fixture": "dynamic_article_admin__赢遍天下.txt",
+      "fixture_sha256": "f524a6324e6841492fa7b2725b3d408e2e36debfe68ff19295ec376367f13759",
+      "expected": {
+        "name": "赢遍天下",
+        "url": "https://ifnkblf.e4kce-krr7o-vuvqhd.work:29411/article/admin/6a3c7be8018539c611cc62d7?url=scyd",
+        "issue": "211",
+        "numbers": [
+          "19",
+          "26",
+          "30",
+          "31",
+          "34"
+        ]
+      }
+    },
+    {
+      "source_kind": "dynamic_article_manager",
+      "name": "有恃无恐",
+      "target": {
+        "url": "https://drxgkjt.uu1oc-eyjpt-uxyccu.xyz:29400/article/manager/6a33e9e7dfa16552b923d428?url=jyb",
+        "name": "有恃无恐",
+        "keywords": [
+          "绝杀五码",
+          "绝杀5码"
+        ],
+        "count": 5,
+        "region": "bottom",
+        "anchor": "有恃无恐",
+        "first_issue_chain": true
+      },
+      "fixture": "dynamic_article_manager__有恃无恐.txt",
+      "fixture_sha256": "cff5faa5308922e3c80b33f84a2301d3835dbdec0153e2dfdbae0e3a737fc934",
+      "expected": {
+        "name": "有恃无恐",
+        "url": "https://drxgkjt.uu1oc-eyjpt-uxyccu.xyz:29400/article/manager/6a33e9e7dfa16552b923d428?url=jyb",
+        "issue": "211",
+        "numbers": [
+          "37",
+          "09",
+          "07",
+          "21",
+          "45"
+        ]
+      }
+    },
+    {
+      "source_kind": "user_page",
+      "name": "独特王国",
+      "target": {
+        "url": "https://zcphjs.ce83x-ms2rz-orwude.work:12277/#/users/4000",
+        "name": "独特王国",
+        "keywords": [
+          "绝杀五码",
+          "绝杀5码"
+        ],
+        "count": 5,
+        "region": "top",
+        "issue_position_window": 3
+      },
+      "fixture": "user_page__独特王国.txt",
+      "fixture_sha256": "c26d39b1ca9e2badec02516faca3a44509f5c64aedc83982443d318a4c9fd205",
+      "expected": {
+        "name": "独特王国",
+        "url": "https://zcphjs.ce83x-ms2rz-orwude.work:12277/#/users/4000",
+        "issue": "211",
+        "numbers": [
+          "48",
+          "10",
+          "33",
+          "27",
+          "19"
+        ]
+      }
+    },
+    {
+      "source_kind": "list_detail",
+      "name": "心若向阳",
+      "target": {
+        "url": "https://mxiscni.nkh6s-vfni4-lwgfvw.xyz:16677/topic/257907.html",
+        "name": "心若向阳",
+        "keywords": [
+          "绝杀五码",
+          "杀5码"
+        ],
+        "count": 5,
+        "region": "top",
+        "anchor": "心若向阳",
+        "list_detail": true,
+        "list_title_keywords": [
+          "心若向阳",
+          "绝杀五码"
+        ]
+      },
+      "fixture": "list_detail__心若向阳.txt",
+      "fixture_sha256": "7a9fb8d334f37141d9b4ab09985d698747dbd9cc83e8a157d005524211451381",
+      "expected": {
+        "name": "心若向阳",
+        "url": "https://mxiscni.nkh6s-vfni4-lwgfvw.xyz:16677/topic/257907.html",
+        "issue": "211",
+        "numbers": [
+          "08",
+          "32",
+          "25",
+          "13",
+          "20"
+        ]
+      }
+    },
+    {
+      "source_kind": "lottery_article",
+      "name": "什么都好",
+      "target": {
+        "url": "https://a.ttss.vip/article.aspx?id=972452",
+        "name": "什么都好",
+        "keywords": [
+          "什么都好"
+        ],
+        "count": 5,
+        "region": "top",
+        "anchor": "什么都好",
+        "issue_position_window": 3
+      },
+      "fixture": "lottery_article__什么都好.txt",
+      "fixture_sha256": "e2146d2c59034ff33b49208fd88ec211ec5c20eb446b1bc3e825adf22c341d71",
+      "expected": {
+        "name": "什么都好",
+        "url": "https://a.ttss.vip/article.aspx?id=972452",
+        "issue": "211",
+        "numbers": [
+          "07",
+          "27",
+          "31",
+          "40",
+          "36"
+        ]
+      }
+    }
+  ]
+}
