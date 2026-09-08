@@ -349,6 +349,66 @@ class ProductionRunService:
             cache_error=cache_error,
         )
 
+    def retry_failed(
+        self,
+        targets: list[dict],
+        active_targets: list[dict],
+        issues: list[str],
+        *,
+        workers: int,
+        retry_passes: int,
+    ) -> RunExecution:
+        outcome = execute_run(
+            targets,
+            issues,
+            workers=workers,
+            retry_passes=retry_passes,
+            debug_dir=self.debug_dir,
+        )
+        result_file, failed_file, report_file = output_files_for_issues(
+            issues,
+            results_dir=self.results_dir,
+            report_dir=self.report_dir,
+        )
+        cache_error = None
+        cache_updated = False
+        if outcome.results:
+            transaction_journal = output_transaction_journal(self.results_dir)
+            recover_pending_transaction(transaction_journal)
+            with file_transaction(
+                [Path(result_file), Path(failed_file)],
+                transaction_journal,
+            ):
+                append_repaired_outputs(
+                    outcome.results,
+                    result_file,
+                    failed_file,
+                    issues,
+                    active_targets,
+                )
+            try:
+                update_recent_duplicate_cache(
+                    self.cache_path,
+                    outcome.results,
+                    issues,
+                    recent_count=10,
+                    active_targets=active_targets,
+                    failure_markers=[],
+                    require_complete=False,
+                )
+            except Exception as exc:
+                cache_error = f"缓存更新未完成：{exc}"
+            else:
+                cache_updated = True
+        return RunExecution(
+            outcome,
+            result_file,
+            failed_file,
+            report_file,
+            cache_updated=cache_updated,
+            cache_error=cache_error,
+        )
+
 
 __all__ = [
     "ProductionRunService",

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+import re
 import sys
 
 from kill5.config import load_targets
@@ -37,6 +38,49 @@ def select_repair_targets(raw_names: str) -> list[dict]:
     return matches
 
 
+def failed_targets_from_file(path: Path, targets: list[dict]) -> tuple[list[dict], list[str]]:
+    target_by_identity = {
+        (str(target.get("name") or "").strip(), str(target.get("url") or "")): target
+        for target in targets
+    }
+    matched: dict[tuple[str, str], dict] = {}
+    issues: set[str] = set()
+    pattern = re.compile(r"^失败\s+(.+?)\s+(https?://\S+)\s+方向:.*?期数:\s*([^\s]+)")
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        match = pattern.match(line)
+        if not match:
+            raise ValueError(f"失败 TXT 存在无法识别的记录：{line}")
+        name, url, raw_issues = match.groups()
+        target = target_by_identity.get((name.strip(), url))
+        if target is None:
+            raise ValueError(f"失败 TXT 记录不在当前 targets.json：{name} {url}")
+        matched[(name.strip(), url)] = target
+        issues.update(parse_issues(raw_issues.replace("期", ",")).copy())
+    return list(matched.values()), sorted(issues, key=int)
+
+
+def find_failed_file(raw_issues: str | None) -> Path:
+    if raw_issues:
+        issues = parse_issues(raw_issues)
+        if len(issues) != 1:
+            raise ValueError("失败重抓只允许指定一个期数")
+        path = RESULTS_DIR / f"{issues[0]}期-杀五码-失败.txt"
+        if not path.exists():
+            raise ValueError(f"未找到失败文件：{path}")
+        return path
+    files = sorted(
+        RESULTS_DIR.glob("*期-杀五码-失败.txt"),
+        key=lambda item: item.stat().st_mtime,
+        reverse=True,
+    )
+    if not files:
+        raise ValueError("没有找到当期失败 TXT")
+    return files[0]
+
+
 def configure_output_encoding() -> None:
     for stream in (sys.stdout, sys.stderr):
         try:
@@ -70,8 +114,25 @@ def main() -> int:
         default=None,
         help="正式修复目录名，多个用逗号分隔；成功后只追加当期成功 TXT",
     )
+    parser.add_argument(
+        "--retry-failed",
+        action="store_true",
+        help="只重抓失败 TXT 中的站点；成功清除对应失败行，失败继续保留",
+    )
     args = parser.parse_args()
+    if args.retry_failed and args.repair_names is not None:
+        print("--retry-failed 与 --repair-names 不能同时使用")
+        return 2
     raw_issues = args.issues
+    failed_file_for_retry = None
+    if args.retry_failed:
+        try:
+            failed_file_for_retry = find_failed_file(raw_issues)
+            if raw_issues is None:
+                raw_issues = re.match(r"^(\d+)期-杀五码-失败\.txt$", failed_file_for_retry.name).group(1)
+        except (ValueError, AttributeError) as exc:
+            print(exc)
+            return 2
     if raw_issues is None:
         print("请输入要爬取的期数，多个期数用逗号分隔，例如：124 或 123,124")
         raw_issues = input(f"期数（直接回车使用 {DEFAULT_ISSUES}）：").strip()
@@ -86,6 +147,15 @@ def main() -> int:
         return 2
 
     run_targets = TARGETS
+    if args.retry_failed:
+        try:
+            run_targets, file_issues = failed_targets_from_file(failed_file_for_retry, TARGETS)
+            if set(file_issues) != set(issues):
+                print("失败 TXT 期数与指定期数不一致")
+                return 2
+        except ValueError as exc:
+            print(exc)
+            return 2
     if args.repair_names is not None:
         if len(issues) != 1:
             print("正式修复追加只允许指定一个期数")
@@ -104,7 +174,15 @@ def main() -> int:
         debug_dir=DEBUG_DIR,
         cache_path=CACHE_FILE,
     )
-    if args.repair_names is None:
+    if args.retry_failed:
+        execution = service.retry_failed(
+            run_targets,
+            TARGETS,
+            issues,
+            workers=max_workers,
+            retry_passes=max(0, args.retry_passes),
+        )
+    elif args.repair_names is None:
         execution = service.run(
             run_targets,
             issues,
@@ -129,6 +207,13 @@ def main() -> int:
         if outcome.failures:
             print(f"失败原因：{outcome.failures[0].reason}")
         return 1
+    if args.retry_failed:
+        if execution.cache_error:
+            print(f"\n{execution.cache_error}")
+        print(f"\n失败重抓完成：成功 {len(outcome.results)} 条，仍失败 {len(outcome.failures)} 条")
+        print(f"成功结果：{execution.result_file}")
+        print(f"失败记录：{execution.failed_file}")
+        return 0 if not execution.cache_error else 1
     if args.repair_names is not None:
         if execution.cache_error:
             print(f"\n{execution.cache_error}")
