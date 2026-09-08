@@ -6,6 +6,7 @@ import re
 import sys
 
 from kill5.config import load_targets
+from kill5.failures import failed_targets_from_file
 from kill5.parser import parse_issues
 from kill5.services import ProductionRunService, cache_update_allowed
 
@@ -38,46 +39,24 @@ def select_repair_targets(raw_names: str) -> list[dict]:
     return matches
 
 
-def failed_targets_from_file(path: Path, targets: list[dict]) -> tuple[list[dict], list[str]]:
-    target_by_identity = {
-        (str(target.get("name") or "").strip(), str(target.get("url") or "")): target
-        for target in targets
-    }
-    matched: dict[tuple[str, str], dict] = {}
-    issues: set[str] = set()
-    pattern = re.compile(r"^失败\s+(.+?)\s+(https?://\S+)\s+方向:.*?期数:\s*([^\s]+)")
-    for raw_line in path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if not line:
-            continue
-        match = pattern.match(line)
-        if not match:
-            raise ValueError(f"失败 TXT 存在无法识别的记录：{line}")
-        name, url, raw_issues = match.groups()
-        target = target_by_identity.get((name.strip(), url))
-        if target is None:
-            raise ValueError(f"失败 TXT 记录不在当前 targets.json：{name} {url}")
-        matched[(name.strip(), url)] = target
-        issues.update(parse_issues(raw_issues.replace("期", ",")).copy())
-    return list(matched.values()), sorted(issues, key=int)
-
-
 def find_failed_file(raw_issues: str | None) -> Path:
-    if raw_issues:
+    if raw_issues is not None:
         issues = parse_issues(raw_issues)
         if len(issues) != 1:
             raise ValueError("失败重抓只允许指定一个期数")
         path = RESULTS_DIR / f"{issues[0]}期-杀五码-失败.txt"
-        if not path.exists():
+        if not path.is_file():
             raise ValueError(f"未找到失败文件：{path}")
         return path
     files = sorted(
-        RESULTS_DIR.glob("*期-杀五码-失败.txt"),
-        key=lambda item: item.stat().st_mtime,
-        reverse=True,
+        item for item in RESULTS_DIR.glob("*期-杀五码-失败.txt")
+        if item.is_file()
+        and re.fullmatch(r"[1-9][0-9]{0,2}期-杀五码-失败\.txt", item.name)
     )
     if not files:
         raise ValueError("没有找到当期失败 TXT")
+    if len(files) != 1:
+        raise ValueError("存在多个单期失败 TXT，请用 --issues 指定重抓期数；禁止按修改时间猜期")
     return files[0]
 
 
@@ -130,7 +109,7 @@ def main() -> int:
             failed_file_for_retry = find_failed_file(raw_issues)
             if raw_issues is None:
                 raw_issues = re.match(r"^(\d+)期-杀五码-失败\.txt$", failed_file_for_retry.name).group(1)
-        except (ValueError, AttributeError) as exc:
+        except (ValueError, AttributeError, OSError) as exc:
             print(exc)
             return 2
     if raw_issues is None:
@@ -150,10 +129,13 @@ def main() -> int:
     if args.retry_failed:
         try:
             run_targets, file_issues = failed_targets_from_file(failed_file_for_retry, TARGETS)
+            if not run_targets:
+                print("失败 TXT 没有待重抓站点，正式 TXT 和缓存保持不变。")
+                return 0
             if set(file_issues) != set(issues):
                 print("失败 TXT 期数与指定期数不一致")
                 return 2
-        except ValueError as exc:
+        except (ValueError, OSError) as exc:
             print(exc)
             return 2
     if args.repair_names is not None:
@@ -175,13 +157,17 @@ def main() -> int:
         cache_path=CACHE_FILE,
     )
     if args.retry_failed:
-        execution = service.retry_failed(
-            run_targets,
-            TARGETS,
-            issues,
-            workers=max_workers,
-            retry_passes=max(0, args.retry_passes),
-        )
+        try:
+            execution = service.retry_failed(
+                run_targets,
+                TARGETS,
+                issues,
+                workers=max_workers,
+                retry_passes=max(0, args.retry_passes),
+            )
+        except (ValueError, OSError, RuntimeError) as exc:
+            print(f"失败重抓已停止：{exc}")
+            return 1
     elif args.repair_names is None:
         execution = service.run(
             run_targets,
@@ -200,7 +186,9 @@ def main() -> int:
     outcome = execution.outcome
 
     if execution.preserved_outputs:
-        if args.repair_names is None:
+        if args.retry_failed:
+            print("\n没有成功重抓结果，原成功 TXT、失败 TXT 和缓存保持不变。")
+        elif args.repair_names is None:
             print("\n本地网络权限阻止了全部访问，已保留原输出文件不覆盖。")
         else:
             print("\n修复抓取未全部成功，已保留原成功 TXT、失败 TXT 和缓存不变。")
@@ -213,7 +201,7 @@ def main() -> int:
         print(f"\n失败重抓完成：成功 {len(outcome.results)} 条，仍失败 {len(outcome.failures)} 条")
         print(f"成功结果：{execution.result_file}")
         print(f"失败记录：{execution.failed_file}")
-        return 0 if not execution.cache_error else 1
+        return 1 if outcome.failures or execution.cache_error else 0
     if args.repair_names is not None:
         if execution.cache_error:
             print(f"\n{execution.cache_error}")
