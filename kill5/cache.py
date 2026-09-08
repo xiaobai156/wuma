@@ -147,6 +147,107 @@ def _recent_issue_set(issue_values: set[str], recent_count: int) -> set[str]:
     return set(ordered_issues(issue_values)[-recent_count:])
 
 
+def update_repaired_cache(
+    cache_path: Path,
+    results: list[CrawlResult],
+    issues: list[str],
+    targets: list[dict],
+    recent_count: int = 10,
+) -> None:
+    """Merge successful repairs without rebuilding any other site's data."""
+    from .output import validate_results_before_write
+
+    if not results:
+        return
+    if recent_count <= 0:
+        raise ValueError("recent_count 必须大于 0")
+    validate_results_before_write(results, issues, targets)
+    if any(not re.fullmatch(r"[0-9]{2}", number) for item in results for number in item.numbers):
+        raise ValueError("定向修复缓存的成功号码必须是两位数")
+    with cache_file_lock(cache_path):
+        if cache_path.exists():
+            data = json.loads(cache_path.read_text(encoding="utf-8-sig"))
+            _parse_cache_data(data)
+            if "sites" not in data:
+                raise ValueError("定向修复需要 sites 缓存；旧缓存必须先独立迁移")
+        else:
+            data = {"sites": [], "failures": [], "periods": recent_count, "base_period": 0}
+        sites = list(data["sites"])
+        by_id = {str(site["id"]).strip(): index for index, site in enumerate(sites)}
+        repaired: dict[str, tuple[dict, set[str]]] = {}
+        for item in results:
+            target = target_for_result(item, targets)
+            stable_id = str(target.get("id") or "").strip()
+            if not stable_id:
+                raise ValueError("定向修复缓存缺少稳定 ID")
+            identity = target_cache_identity(target, project_name=PROJECT_ROOT.name)
+            index = by_id.get(stable_id)
+            if index is None:
+                if any(canonical_url(site["url"]) == canonical_url(item.url)
+                       or site["name"] == item.name for site in sites):
+                    raise ValueError(f"{item.name} 的缓存名称或 URL 已绑定其他稳定 ID")
+                site = dict(id=stable_id, name=item.name, url=item.url,
+                            pick=normalize_region(target.get("region")),
+                            browser=bool(target.get("rendered_fallback_selectors")),
+                            click_first=bool(target.get("click_first")),
+                            fingerprint={}, identity=identity)
+                index = len(sites)
+                sites.append(site)
+                by_id[stable_id] = index
+            else:
+                site = dict(sites[index])
+                if site["name"] != item.name or site["url"] != item.url:
+                    raise ValueError(f"{item.name} 的缓存名称或 URL 与本次成功结果冲突")
+                if site.get("fingerprint") and site.get("identity") != identity:
+                    raise ValueError(f"{item.name} 的缓存身份与当前配置不一致，已停止同步")
+                site["identity"] = identity
+            fingerprint: dict[str, str] = {}
+            for raw_issue, numbers in site.get("fingerprint", {}).items():
+                cached_issue = issue_key(raw_issue)
+                if not isinstance(numbers, str):
+                    raise ValueError(f"{item.name} 的缓存号码格式无效")
+                values = numbers.split(",")
+                if (not cached_issue or len(values) != target["count"]
+                        or any(not re.fullmatch(r"[0-9]{2}", value) or not valid_number(value) for value in values)
+                        or has_duplicate_numbers(values) or cached_issue in fingerprint):
+                    raise ValueError(f"{item.name} 的缓存期数或号码无效/重复")
+                fingerprint[cached_issue] = numbers
+            issue = normalize_issue(item.issue)
+            numbers = ",".join(item.numbers)
+            if issue in fingerprint and fingerprint[issue] != numbers:
+                raise ValueError(f"{item.name} {issue}期 新结果与正式缓存冲突，已停止同步")
+            fingerprint[issue] = numbers
+            site["fingerprint"] = {key: fingerprint[key] for key in
+                                   reversed(ordered_issues(fingerprint)[-recent_count:])}
+            sites[index] = site
+            repaired.setdefault(stable_id, (target, set()))[1].add(issue)
+
+        remaining = []
+        for marker in data.get("failures", []):
+            if not isinstance(marker, dict):
+                raise ValueError("缓存失败标记不是对象")
+            stable_id = str(marker.get("target_id") or "").strip()
+            match = repaired.get(stable_id) if stable_id else next(
+                (value for value in repaired.values()
+                 if (marker.get("name"), marker.get("url")) ==
+                    (value[0]["name"], value[0]["url"])), None
+            )
+            if match and issue_key(marker.get("issue", "")) in match[1]:
+                target = match[0]
+                if (marker.get("name"), marker.get("url"), marker.get("status")) != (
+                        target["name"], target["url"], "failed"):
+                    raise ValueError("待清除缓存失败标记的身份或状态冲突")
+                continue
+            remaining.append(marker)
+        updated = {**data, "sites": sites, "failures": remaining}
+        if updated == data:
+            return
+        periods = ordered_issues(issue for site in sites for issue in site.get("fingerprint", {}))
+        updated["base_period"] = int(periods[-1]) if periods else 0
+        updated["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+        atomic_write_json(cache_path, updated)
+
+
 def update_recent_duplicate_cache(
     cache_path: Path,
     results: list[CrawlResult],
@@ -717,5 +818,6 @@ __all__ = [
     'atomic_write_json',
     'read_cache_document',
     'update_recent_duplicate_cache',
+    'update_repaired_cache',
     '_update_recent_duplicate_cache_locked',
 ]

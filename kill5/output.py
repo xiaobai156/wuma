@@ -5,7 +5,7 @@ import re
 import time
 
 from .domain import CrawlFailure, CrawlResult, RunStats
-from .failures import failure_category, summarize_failures
+from .failures import failure_category, parse_failure_line, summarize_failures
 from .identity import (
     dedupe_results,
     failure_identity,
@@ -14,7 +14,7 @@ from .identity import (
 )
 from .parser import normalize_issue, normalize_region, preserve_configured_name, valid_number
 from .parser import has_duplicate_numbers
-from .storage import atomic_write_text
+from .storage import atomic_write_bytes, atomic_write_text
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -461,11 +461,14 @@ def append_repaired_outputs(
     if len(normalized_issues) != 1:
         raise ValueError("失败修复输出只允许单期")
     validate_results_before_write(results, issues, targets, failures=[])
+    if not results:
+        return
 
     result_path = Path(result_file)
     if not result_path.exists():
         raise FileNotFoundError("当期成功 TXT 不存在，无法执行修复追加")
-    existing_lines = result_path.read_text(encoding="utf-8").splitlines()
+    original_success = result_path.read_bytes()
+    existing_lines = original_success.decode("utf-8-sig").splitlines()
     existing_by_name: dict[str, str] = {}
     for line in existing_lines:
         if not line.strip():
@@ -476,13 +479,15 @@ def append_repaired_outputs(
         name = match.group(2)
         if name in existing_by_name:
             raise ValueError(f"原成功 TXT 存在重复目录，已停止追加：{name}")
-        existing_by_name[name] = line.strip()
+        existing_by_name[name] = f"{match.group(1)} {name}"
 
     additions: list[str] = []
     added_names: set[str] = set()
     repaired_keys: set[tuple[str, str]] = set()
     for item in dedupe_results(results):
         line = f"{','.join(item.numbers)} {item.name}"
+        if any(not re.fullmatch(r"[0-9]{2}", number) for number in item.numbers):
+            raise ValueError(f"{item.name} 的成功号码必须是两位数")
         existing = existing_by_name.get(item.name)
         if existing and existing != line:
             raise ValueError(f"成功 TXT 已存在 {item.name} 的不同结果，禁止覆盖")
@@ -492,23 +497,18 @@ def append_repaired_outputs(
         repaired_keys.add((item.name, item.url))
 
     failed_path = Path(failed_file)
-    failure_lines = (
-        failed_path.read_text(encoding="utf-8").splitlines(keepends=True)
-        if failed_path.exists()
-        else []
-    )
+    original_failure = failed_path.read_bytes() if failed_path.exists() else b""
+    failure_lines = original_failure.decode("utf-8-sig").splitlines(keepends=True)
     matched_failures: set[tuple[str, str]] = set()
     remaining_failures: list[str] = []
     for line in failure_lines:
-        stripped = line.strip()
-        matched = next(
-            (
-                key
-                for key in repaired_keys
-                if stripped.startswith(f"失败 {key[0]} {key[1]} ")
-            ),
-            None,
-        )
+        matched = None
+        try:
+            name, url, _direction, line_issues = parse_failure_line(line)
+            if (name, url) in repaired_keys and set(line_issues) == normalized_issues:
+                matched = (name, url)
+        except ValueError:
+            pass  # Unrelated or unrecognised lines are never removed by a repair.
         if matched is None:
             remaining_failures.append(line)
         else:
@@ -524,18 +524,25 @@ def append_repaired_outputs(
             f"失败 TXT 没有对应待修复记录，已停止追加：{','.join(missing_failures)}"
         )
 
-    merged_lines = [*existing_lines, *additions]
-    atomic_write_text(
-        result_path,
-        "\n".join(merged_lines) + ("\n" if merged_lines else ""),
-    )
-    if any(line.strip() for line in remaining_failures):
-        atomic_write_text(failed_path, "".join(remaining_failures))
-    else:
-        remove_stale_failure_file(failed_file)
+    merged_success = original_success
+    if additions:
+        eol = re.search(rb"\r\n|\n|\r", original_success)
+        newline = eol.group() if eol else b"\r\n"
+        if original_success.removeprefix(b"\xef\xbb\xbf") and not original_success.endswith((b"\r", b"\n")):
+            merged_success += newline
+        merged_success += newline.join(line.encode("utf-8") for line in additions) + newline
+        atomic_write_bytes(result_path, merged_success)
+    if matched_failures:
+        if any(line.strip() for line in remaining_failures):
+            bom = b"\xef\xbb\xbf" if original_failure.startswith(b"\xef\xbb\xbf") else b""
+            merged_failure = bom + "".join(remaining_failures).encode("utf-8")
+            atomic_write_bytes(failed_path, merged_failure)
+            if failed_path.read_bytes() != merged_failure:
+                raise ValueError("修复后的失败 TXT 复读校验不一致")
+        else:
+            remove_stale_failure_file(failed_file)
 
-    actual_lines = result_path.read_text(encoding="utf-8").splitlines()
-    if actual_lines != merged_lines:
+    if result_path.read_bytes() != merged_success:
         raise ValueError("修复追加后的成功 TXT 复读校验不一致")
 
 

@@ -4,22 +4,24 @@ from dataclasses import dataclass
 from pathlib import Path
 import time
 
-from .cache import update_recent_duplicate_cache
+from .cache import update_recent_duplicate_cache, update_repaired_cache
 from .domain import CrawlFailure, CrawlResult, RunExecution, RunOutcome, RunStats
 from .errors import ErrorCode
+from .failures import failed_targets_from_text
 from .engine import (
     blocked_by_local_socket_policy,
     crawl_targets,
     is_transient_failure,
 )
-from .identity import canonical_url, dedupe_results
+from .identity import canonical_url, dedupe_results, target_for_result
 from .output import (
     append_repaired_outputs,
     output_files_for_issues,
     output_transaction_journal,
+    validate_results_before_write,
     write_outputs,
 )
-from .parser import normalize_issue, preserve_configured_name
+from .parser import normalize_issue, parse_issues, preserve_configured_name
 from .storage import file_transaction, recover_pending_transaction
 
 
@@ -329,14 +331,12 @@ class ProductionRunService:
 
         cache_error = None
         try:
-            update_recent_duplicate_cache(
+            update_repaired_cache(
                 self.cache_path,
                 outcome.results,
                 issues,
                 recent_count=10,
-                active_targets=active_targets,
-                failure_markers=[],
-                require_complete=False,
+                targets=targets,
             )
         except Exception as exc:
             cache_error = f"缓存更新未完成：{exc}"
@@ -358,6 +358,24 @@ class ProductionRunService:
         workers: int,
         retry_passes: int,
     ) -> RunExecution:
+        normalized = parse_issues(",".join(issues))
+        if len(normalized) != 1:
+            raise ValueError("失败重抓只允许指定一个期数")
+        issues = normalized
+        failed_path = self.results_dir / f"{issues[0]}期-杀五码-失败.txt"
+        failure_snapshot = failed_path.read_bytes()
+        selected, file_issues = failed_targets_from_text(failure_snapshot.decode("utf-8-sig"), active_targets)
+        if targets != selected:
+            raise ValueError("重抓目标与失败 TXT 不一致，禁止扩大或替换抓取范围")
+        if selected and file_issues != issues:
+            raise ValueError("失败 TXT 期数与指定期数不一致")
+        if not selected:
+            return RunExecution(
+                RunOutcome([], [], RunStats(0, 0, 0, 0, 0), issues, []),
+                str(self.results_dir / f"{issues[0]}期-杀五码-成功.txt"),
+                str(failed_path), str(self.report_dir / f"{issues[0]}期报告.txt"),
+                cache_updated=False,
+            )
         outcome = execute_run(
             targets,
             issues,
@@ -373,28 +391,29 @@ class ProductionRunService:
         cache_error = None
         cache_updated = False
         if outcome.results:
+            validate_results_before_write(outcome.results, issues, targets, failures=outcome.failures)
+            successful_targets = [target_for_result(item, targets) for item in outcome.results]
             transaction_journal = output_transaction_journal(self.results_dir)
-            recover_pending_transaction(transaction_journal)
             with file_transaction(
                 [Path(result_file), Path(failed_file)],
                 transaction_journal,
             ):
+                if not failed_path.exists() or failed_path.read_bytes() != failure_snapshot:
+                    raise ValueError("抓取期间失败 TXT 已变化，已停止提交，请重新读取后重抓")
                 append_repaired_outputs(
                     outcome.results,
                     result_file,
                     failed_file,
                     issues,
-                    active_targets,
+                    successful_targets,
                 )
             try:
-                update_recent_duplicate_cache(
+                update_repaired_cache(
                     self.cache_path,
                     outcome.results,
                     issues,
                     recent_count=10,
-                    active_targets=active_targets,
-                    failure_markers=[],
-                    require_complete=False,
+                    targets=successful_targets,
                 )
             except Exception as exc:
                 cache_error = f"缓存更新未完成：{exc}"
@@ -407,6 +426,7 @@ class ProductionRunService:
             report_file,
             cache_updated=cache_updated,
             cache_error=cache_error,
+            preserved_outputs=not outcome.results,
         )
 
 
