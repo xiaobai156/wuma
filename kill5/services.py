@@ -1,14 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import json
 from pathlib import Path
-import re
-import shutil
 import time
 
 from .cache import update_recent_duplicate_cache
-from .config import load_targets
 from .domain import CrawlFailure, CrawlResult, RunExecution, RunOutcome, RunStats
 from .errors import ErrorCode
 from .engine import (
@@ -17,8 +13,13 @@ from .engine import (
     is_transient_failure,
 )
 from .identity import canonical_url, dedupe_results
-from .output import output_files_for_issues, output_transaction_journal, write_outputs
-from .parser import normalize_issue, normalize_region, preserve_configured_name
+from .output import (
+    append_repaired_outputs,
+    output_files_for_issues,
+    output_transaction_journal,
+    write_outputs,
+)
+from .parser import normalize_issue, preserve_configured_name
 from .storage import file_transaction, recover_pending_transaction
 
 
@@ -281,45 +282,15 @@ class ProductionRunService:
             cache_error=cache_error,
         )
 
-
-@dataclass(frozen=True)
-class StagingRunService:
-    results_dir: Path
-    debug_dir: Path
-    cache_path: Path
-    production_cache_path: Path
-
-    def seed_cache(self) -> None:
-        if self.cache_path.exists():
-            return
-        self.cache_path.parent.mkdir(parents=True, exist_ok=True)
-        if self.production_cache_path.exists():
-            shutil.copy2(self.production_cache_path, self.cache_path)
-            return
-        self.cache_path.write_text(
-            json.dumps(
-                {
-                    "version": 1,
-                    "generated_at": "",
-                    "recent_count": 10,
-                    "records": [],
-                },
-                ensure_ascii=False,
-                indent=2,
-            ),
-            encoding="utf-8",
-        )
-
-    def run(
+    def run_repairs(
         self,
         targets: list[dict],
+        active_targets: list[dict],
         issues: list[str],
         *,
         workers: int,
         retry_passes: int,
     ) -> RunExecution:
-        transaction_journal = output_transaction_journal(self.results_dir)
-        recover_pending_transaction(transaction_journal)
         outcome = execute_run(
             targets,
             issues,
@@ -330,129 +301,56 @@ class StagingRunService:
         result_file, failed_file, report_file = output_files_for_issues(
             issues,
             results_dir=self.results_dir,
-            report_dir=self.results_dir,
+            report_dir=self.report_dir,
         )
-        cache_updated = False
-        cache_error = None
-        transaction_paths = [
-            Path(result_file),
-            Path(failed_file),
-            Path(report_file),
-        ]
-        with file_transaction(transaction_paths, transaction_journal):
-            write_outputs(
-                outcome.results,
-                outcome.failures,
+        if outcome.failures or not outcome.results:
+            return RunExecution(
+                outcome,
                 result_file,
                 failed_file,
                 report_file,
-                outcome.stats,
+                cache_updated=False,
+                preserved_outputs=True,
+            )
+
+        transaction_journal = output_transaction_journal(self.results_dir)
+        recover_pending_transaction(transaction_journal)
+        with file_transaction(
+            [Path(result_file), Path(failed_file)],
+            transaction_journal,
+        ):
+            append_repaired_outputs(
+                outcome.results,
+                result_file,
+                failed_file,
                 issues,
                 targets,
             )
-        if cache_update_allowed(outcome):
-            try:
-                self.seed_cache()
-                update_recent_duplicate_cache(
-                    self.cache_path,
-                    outcome.results,
-                    issues,
-                    recent_count=10,
-                    active_targets=targets,
-                    failure_markers=failure_cache_markers(outcome.failures, issues),
-                    require_complete=not outcome.failures,
-                )
-            except Exception as exc:
-                cache_error = f"缓存更新未完成：{exc}"
-            else:
-                cache_updated = True
+
+        cache_error = None
+        try:
+            update_recent_duplicate_cache(
+                self.cache_path,
+                outcome.results,
+                issues,
+                recent_count=10,
+                active_targets=active_targets,
+                failure_markers=[],
+                require_complete=False,
+            )
+        except Exception as exc:
+            cache_error = f"缓存更新未完成：{exc}"
         return RunExecution(
             outcome,
             result_file,
             failed_file,
             report_file,
-            cache_updated=cache_updated,
+            cache_updated=cache_error is None,
             cache_error=cache_error,
         )
 
 
-def parse_target_names(raw_values: list[str] | None) -> list[str]:
-    names: list[str] = []
-    for raw_value in raw_values or []:
-        for part in re.split(r"[,，]+", raw_value):
-            name = part.strip()
-            if name and name not in names:
-                names.append(name)
-    return names
-
-
-def select_existing_targets(targets: list[dict], names: list[str]) -> list[dict]:
-    if not names:
-        raise ValueError("没有指定测试目录")
-    matches_by_name: dict[str, list[dict]] = {}
-    for target in targets:
-        name = preserve_configured_name(target.get("name") or "")
-        matches_by_name.setdefault(name, []).append(target)
-    missing = [name for name in names if name not in matches_by_name]
-    if missing:
-        raise ValueError(f"targets.json 没有启用目录：{', '.join(missing)}")
-    conflicts = [name for name in names if len(matches_by_name[name]) != 1]
-    if conflicts:
-        raise ValueError(f"targets.json 目录名不唯一，已停止：{', '.join(conflicts)}")
-    wanted = set(names)
-    return [
-        target
-        for target in targets
-        if preserve_configured_name(target.get("name") or "") in wanted
-    ]
-
-
-def load_staging_candidates(
-    path: Path,
-    production_targets: list[dict],
-) -> list[dict]:
-    candidates = load_targets(path, allow_legacy=True)
-    if not candidates:
-        raise ValueError("候选 JSON 没有启用站点")
-    names = [preserve_configured_name(item.get("name") or "") for item in candidates]
-    urls = [canonical_url(str(item.get("url") or "")) for item in candidates]
-    if "未命名" in names:
-        raise ValueError("候选 JSON 每个站点都必须配置 name")
-    if any(not normalize_region(item.get("region")) for item in candidates):
-        raise ValueError("候选 JSON 每个站点都必须配置 top/bottom/顶部/尾部")
-    if any(not item.get("keywords") for item in candidates):
-        raise ValueError("候选 JSON 每个站点都必须配置真实页面 keywords")
-    if len(names) != len(set(names)):
-        raise ValueError("候选 JSON 存在同名目录")
-    if len(urls) != len(set(urls)):
-        raise ValueError("候选 JSON 存在重复 URL")
-
-    production_names = {
-        preserve_configured_name(item.get("name") or "")
-        for item in production_targets
-    }
-    production_urls = {
-        canonical_url(str(item.get("url") or ""))
-        for item in production_targets
-    }
-    duplicate_names = [name for name in names if name in production_names]
-    duplicate_urls = [url for url in urls if url in production_urls]
-    if duplicate_names:
-        raise ValueError(
-            f"候选目录已存在于正式 targets.json：{', '.join(duplicate_names)}"
-        )
-    if duplicate_urls:
-        raise ValueError(
-            f"候选 URL 已存在于正式 targets.json：{', '.join(duplicate_urls)}"
-        )
-    return candidates
-
-
 __all__ = [
     "ProductionRunService",
-    "StagingRunService",
     "execute_run",
-    "load_staging_candidates",
-    "parse_target_names",
-    "select_existing_targets",
 ]

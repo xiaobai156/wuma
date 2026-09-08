@@ -6,7 +6,6 @@ import re
 import time
 from urllib.parse import urlparse
 
-from .config import target_allows_insecure_tls
 from .domain import CrawlFailure, CrawlResult
 from .errors import CrawlError, ErrorCode, classify_exception
 from .documents import (
@@ -158,7 +157,6 @@ def crawl_one(
                     "anchor",
                     "stop_anchor",
                     "decoded_anchor_only",
-                    "issue_position_window",
                     "first_issue_chain",
                 )
             ):
@@ -205,22 +203,53 @@ def crawl_one(
                 evidence={"issues": list(issues)},
             )
 
-        issue_map = extract_issue_numbers(
-            content,
-            issues,
-            keywords=parse_keywords,
-            expected_count=target.get("count"),
-            position=target.get("position", "first"),
-            strict_ambiguous=True,
-            allow_duplicate_numbers=False,
-            anchor=target.get("anchor"),
-            stop_anchor=target.get("stop_anchor"),
-            region=target.get("region"),
-            issue_position_window=target.get("issue_position_window"),
-            first_issue_chain=target.get("first_issue_chain", False),
-            keyword_before_issue=target.get("keyword_before_issue", False),
-            keyword_before_issue_window=target.get("keyword_before_issue_window"),
-        )
+        try:
+            issue_map = extract_issue_numbers(
+                content,
+                issues,
+                keywords=parse_keywords,
+                expected_count=target.get("count"),
+                position=target.get("position", "first"),
+                strict_ambiguous=True,
+                allow_duplicate_numbers=False,
+                anchor=target.get("anchor"),
+                stop_anchor=target.get("stop_anchor"),
+                region=target.get("region"),
+                issue_position_window=target.get("issue_position_window"),
+                first_issue_chain=target.get("first_issue_chain", False),
+                keyword_before_issue=target.get("keyword_before_issue", False),
+                keyword_before_issue_window=target.get("keyword_before_issue_window"),
+            )
+        except CrawlError as exc:
+            if not (
+                target.get("rendered_fallback_selectors")
+                and not is_admin_article
+                and exc.code in {ErrorCode.ANCHOR_MISSING, ErrorCode.DOCUMENT_BOUNDARY_ERROR}
+            ):
+                raise
+            rendered_name, rendered_content = render_static_page(
+                url,
+                target["rendered_fallback_selectors"],
+                encoding=target.get("encoding"),
+            )
+            issue_map = extract_issue_numbers(
+                rendered_content,
+                issues,
+                keywords=parse_keywords,
+                expected_count=target.get("count"),
+                position=target.get("position", "first"),
+                strict_ambiguous=True,
+                allow_duplicate_numbers=False,
+                anchor=target.get("anchor"),
+                stop_anchor=target.get("stop_anchor"),
+                region=target.get("region"),
+                issue_position_window=target.get("issue_position_window"),
+                first_issue_chain=target.get("first_issue_chain", False),
+                keyword_before_issue=target.get("keyword_before_issue", False),
+                keyword_before_issue_window=target.get("keyword_before_issue_window"),
+            )
+            auto_name = rendered_name
+            content = rendered_content
         missing_issues = [issue for issue in issues if issue not in issue_map]
         if missing_issues and target.get("rendered_fallback_selectors") and not is_admin_article:
             rendered_name, rendered_content = render_static_page(

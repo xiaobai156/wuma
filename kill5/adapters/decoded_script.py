@@ -13,6 +13,7 @@ def crawl_decoded_script_page(target: dict) -> tuple[str, str]:
         decoded_stop_anchor=target.get("decoded_stop_anchor"),
         decoded_anchor_to_end=target.get("decoded_anchor_to_end", False),
         allow_insecure_tls=target_allows_insecure_tls(target),
+        include_script_documents=True,
     )
 
 

@@ -1,9 +1,0 @@
-{
-  "schema_version": 1,
-  "source_sha256": "23f2bb7347b774d977670377088aaf061f20629b57fa62261fcb3fb9f744e536",
-  "target_count": 190,
-  "stable_id_count": 190,
-  "order_unchanged": true,
-  "roundtrip_equal": true,
-  "applied_to_work_copy": true
-}

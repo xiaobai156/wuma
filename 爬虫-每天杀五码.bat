@@ -13,12 +13,7 @@ if not defined PY_CMD (
   exit /b 1
 )
 cd /d "%~dp0"
-where py >nul 2>nul
-if %errorlevel%==0 (
-  %PY_CMD% run_crawler_prompt.py
-) else (
-  %PY_CMD% run_crawler_prompt.py
-)
+%PY_CMD% crawler.py --workers 16
 set "RUN_CODE=%ERRORLEVEL%"
 echo.
 pause

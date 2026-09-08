@@ -6,37 +6,21 @@ import re
 from .errors import CrawlError, ErrorCode
 from .parser import (
     CANDIDATE_REGION_WINDOW,
-    remove_fragment,
-    origin,
     normalize_issue,
-    parse_issues,
-    fullwidth_to_halfwidth,
     html_to_text,
     unique_keep_order,
-    valid_number,
     keyword_scoped_number_groups,
     has_duplicate_numbers,
-    has_pending_open_marker,
     select_candidate,
     issue_segment_matches,
-    issue_segments,
-    all_issue_segment_matches,
     any_keyword_matches,
-    as_list,
-    find_anchor_index,
     scope_text_by_anchor,
     normalize_region,
-    candidate_region,
     filter_candidates_by_region,
     needs_strict_region_window,
     scope_first_issue_chain,
     issue_position_window_starts,
     keyword_before_issue_candidates,
-    clean_name,
-    preserve_configured_name,
-    extract_name_from_text,
-    decode_strdecode_payloads,
-    select_decoded_anchor_parts,
 )
 
 
@@ -70,16 +54,21 @@ def issue_candidates_for_validation(
             candidates.append((group, segment, match.start()))
 
     if keyword_before_issue:
-        candidates.extend(
-            keyword_before_issue_candidates(
-                text,
-                issue,
-                keywords,
-                expected_count,
-                int(keyword_before_issue_window or 160),
-                allowed_window_starts=allowed_window_starts,
-            )
+        extra_candidates = keyword_before_issue_candidates(
+            text,
+            issue,
+            keywords,
+            expected_count,
+            int(keyword_before_issue_window or 160),
+            allowed_window_starts=allowed_window_starts,
         )
+        if not allow_duplicate_numbers:
+            extra_candidates = [
+                candidate
+                for candidate in extra_candidates
+                if not has_duplicate_numbers(candidate[0])
+            ]
+        candidates.extend(extra_candidates)
     return candidates
 
 
@@ -191,18 +180,25 @@ def extract_issue_numbers(
                 if expected_count and len(group) != expected_count:
                     # 数量不符直接拒绝，不能从其他组或其他位置补数字来凑够 count。
                     continue
+                if not allow_duplicate_numbers and has_duplicate_numbers(group):
+                    continue
                 candidates.append((group, segment, match.start()))
         if keyword_before_issue:
-            candidates.extend(
-                keyword_before_issue_candidates(
-                    text,
-                    issue,
-                    keywords,
-                    expected_count,
-                    int(keyword_before_issue_window or 160),
-                    allowed_window_starts=allowed_window_starts,
-                )
+            extra_candidates = keyword_before_issue_candidates(
+                text,
+                issue,
+                keywords,
+                expected_count,
+                int(keyword_before_issue_window or 160),
+                allowed_window_starts=allowed_window_starts,
             )
+            if not allow_duplicate_numbers:
+                extra_candidates = [
+                    candidate
+                    for candidate in extra_candidates
+                    if not has_duplicate_numbers(candidate[0])
+                ]
+            candidates.extend(extra_candidates)
         if candidates:
             strict_region = needs_strict_region_window(candidates)
             normalized_region = normalize_region(region)

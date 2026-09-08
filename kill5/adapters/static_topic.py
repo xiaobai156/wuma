@@ -22,16 +22,13 @@ SCRIPT_WORKERS = 2
 
 def is_fetchable_script(src: str, page_url: str) -> bool:
     parsed_src = urlparse(src)
-    parsed_page = urlparse(page_url)
-    if "hm.baidu.com" in parsed_src.netloc:
+    if "hm.baidu.com" in parsed_src.netloc.lower():
         return False
-    if "/upload/script/" in src:
+    if "/upload/script/" in parsed_src.path.lower():
         return True
-    if parsed_src.netloc == parsed_page.netloc:
+    if origin_key(src) == origin_key(page_url):
         return True
-    if not parsed_src.netloc:
-        return True
-    return False
+    return not parsed_src.netloc
 
 
 def script_urls(html_value: str, page_url: str) -> list[str]:
@@ -52,6 +49,7 @@ def crawl_static_page(
     decoded_stop_anchor: str | None = None,
     decoded_anchor_to_end: bool = False,
     allow_insecure_tls: bool = False,
+    include_script_documents: bool = False,
 ) -> tuple[str, str]:
     page_url = remove_fragment(url)
     if allow_insecure_tls:
@@ -61,9 +59,13 @@ def crawl_static_page(
     chunk_count = max(1, int(decoded_anchor_chunks or 1))
 
     def source_documents(source: str) -> list[str]:
-        decoded = decode_strdecode_payloads(source)
         if not decoded_anchor_only:
-            return [source, *decoded]
+            return (
+                [source, *decode_strdecode_payloads(source)]
+                if include_script_documents
+                else [source]
+            )
+        decoded = decode_strdecode_payloads(source)
         selected = select_decoded_anchor_parts(
             decoded,
             decoded_anchor_only,
@@ -74,7 +76,7 @@ def crawl_static_page(
         return ["\n".join(selected)] if selected else []
 
     parts = source_documents(page)
-    urls = script_urls(page, page_url)
+    urls = script_urls(page, page_url) if include_script_documents else []
 
     def fetch_script_parts(src: str) -> list[str]:
         # TLS 例外仅限该页面自身来源，第三方脚本仍使用正常证书校验。
@@ -97,7 +99,7 @@ def crawl_static_page(
                 try:
                     script_parts[index] = future.result()
                 except Exception as exc:
-                    if "/upload/script/" in src:
+                    if "/upload/script/" in urlparse(src).path.lower():
                         required_errors.append((src, exc))
         if required_errors:
             first_error = required_errors[0][1]
@@ -113,6 +115,13 @@ def crawl_static_page(
             if fetched_parts:
                 parts.extend(fetched_parts)
 
+    parts = unique_keep_order(parts)
+    if decoded_anchor_only and len(parts) > 1:
+        raise CrawlError(
+            ErrorCode.DOCUMENT_BOUNDARY_ERROR,
+            f"专属解码正文锚点匹配了 {len(parts)} 个不同来源文档，已停止避免跨文档取数",
+            stage="decoded_document_scope",
+        )
     combined = f"\n{DOCUMENT_BOUNDARY}\n".join(parts)
     if decoded_anchor_only and not combined:
         raise CrawlError(
@@ -147,6 +156,8 @@ def render_static_page(
     page_url = remove_fragment(url)
     parts: list[str] = []
     try:
+        # crawl_one runs in worker threads; sync Playwright objects stay owned by
+        # this call so no browser/context is shared across threads or leaked.
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(headless=True)
             try:

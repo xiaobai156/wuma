@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -95,6 +96,61 @@ def file_lock(lock_path: Path, timeout: float = 30.0) -> Iterator[None]:
                 fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
+@contextmanager
+def _windows_transaction_lock(lock_path: Path, timeout: float = 30.0) -> Iterator[None]:
+    """Use a named Windows mutex so output transactions do not create a lock file."""
+    import ctypes
+    from ctypes import wintypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.CreateMutexW.argtypes = [
+        wintypes.LPVOID,
+        wintypes.BOOL,
+        wintypes.LPCWSTR,
+    ]
+    kernel32.CreateMutexW.restype = wintypes.HANDLE
+    kernel32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+    kernel32.WaitForSingleObject.restype = wintypes.DWORD
+    kernel32.ReleaseMutex.argtypes = [wintypes.HANDLE]
+    kernel32.ReleaseMutex.restype = wintypes.BOOL
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+    kernel32.CloseHandle.restype = wintypes.BOOL
+
+    digest = hashlib.sha256(
+        str(lock_path.resolve()).encode("utf-8")
+    ).hexdigest()
+    mutex_name = f"Local\\Kill5Transaction-{digest}"
+    handle = kernel32.CreateMutexW(None, False, mutex_name)
+    if not handle:
+        raise ctypes.WinError(ctypes.get_last_error())
+
+    wait_timeout = max(0, min(int(timeout * 1000), 0xFFFFFFFF))
+    wait_result = kernel32.WaitForSingleObject(handle, wait_timeout)
+    acquired = wait_result in (0x00000000, 0x00000080)
+    try:
+        if wait_result == 0x00000102:
+            raise TimeoutError(f"等待事务锁 {lock_path.name} 超时")
+        if wait_result == 0xFFFFFFFF:
+            raise ctypes.WinError(ctypes.get_last_error())
+        if not acquired:
+            raise OSError(f"等待事务锁 {lock_path.name} 失败：{wait_result}")
+        yield
+    finally:
+        if acquired:
+            kernel32.ReleaseMutex(handle)
+        kernel32.CloseHandle(handle)
+
+
+@contextmanager
+def _transaction_lock(lock_path: Path, timeout: float = 30.0) -> Iterator[None]:
+    if os.name == "nt":
+        with _windows_transaction_lock(lock_path, timeout):
+            yield
+    else:
+        with file_lock(lock_path, timeout):
+            yield
+
+
 def _transaction_paths(journal_path: Path) -> tuple[Path, Path]:
     backup_dir = journal_path.with_name(f"{journal_path.name}.data")
     lock_path = journal_path.with_name(f"{journal_path.name}.lock")
@@ -172,7 +228,7 @@ def _recover_pending_transaction_locked(journal_path: Path) -> bool:
 def recover_pending_transaction(journal_path: Path) -> bool:
     journal_path = journal_path.resolve()
     _backup_dir, lock_path = _transaction_paths(journal_path)
-    with file_lock(lock_path):
+    with _transaction_lock(lock_path):
         return _recover_pending_transaction_locked(journal_path)
 
 
@@ -226,7 +282,7 @@ def file_transaction(paths: list[Path], journal_path: Path) -> Iterator[None]:
             seen.add(resolved)
             unique_paths.append(resolved)
     _backup_dir, lock_path = _transaction_paths(journal_path)
-    with file_lock(lock_path):
+    with _transaction_lock(lock_path):
         _recover_pending_transaction_locked(journal_path)
         backup_dir = _snapshot_transaction(unique_paths, journal_path)
         try:

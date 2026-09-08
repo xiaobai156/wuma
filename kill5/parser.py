@@ -42,9 +42,18 @@ def normalize_issue(issue: str) -> str:
 
 def parse_issues(raw: str) -> list[str]:
     issues = []
+    seen = set()
     for part in re.split(r"[,，\s]+", raw.strip()):
         if part:
-            issues.append(normalize_issue(part))
+            try:
+                issue = normalize_issue(part)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"期数必须是 1 至 999：{part}") from exc
+            if not 1 <= int(issue) <= 999:
+                raise ValueError(f"期数必须是 1 至 999：{part}")
+            if issue not in seen:
+                seen.add(issue)
+                issues.append(issue)
     return issues
 
 
@@ -188,8 +197,15 @@ def keyword_scoped_number_groups(
             between = re.sub(r"^(?:五码|5码|六码|6码)", "", between, count=1)
             return OTHER_DATA_COLUMN_PATTERN.search(between) is None
 
+        raw_group_pattern = (
+            r"(?<!\d)"
+            + r"(?:[\s.,，。、;；|/\\-]+)".join(map(re.escape, group))
+            + r"(?!\d)"
+        )
+        raw_group_match = re.search(raw_group_pattern, scope)
+        raw_group_start = raw_group_match.start() if raw_group_match else len(scope)
         literal_positions = [
-            scope.rfind(keyword, 0, max(0, scope.find(group[0])))
+            scope.rfind(keyword, 0, raw_group_start)
             for keyword in keyword_list
             if not normalize_keyword(keyword)
         ]
@@ -405,6 +421,10 @@ def scope_text_by_anchor(
         )
 
     end_index = len(text)
+    for boundary in (DOCUMENT_BOUNDARY, USER_RECORD_BOUNDARY):
+        candidate = text.find(boundary, start_index)
+        if candidate >= 0:
+            end_index = min(end_index, candidate)
     for stop_anchor in as_list(stop_anchors):
         candidate = find_anchor_index(text, stop_anchor, start=start_index + 1)
         if candidate >= 0:
@@ -510,7 +530,7 @@ def scope_first_issue_chain(
             groups = [
                 group
                 for group in keyword_scoped_number_groups(segment, keywords)
-                if len(group) == expected_count
+                if len(group) == expected_count and not has_duplicate_numbers(group)
             ]
             if not groups:
                 continue
@@ -603,10 +623,12 @@ def issue_position_window_starts(
                 int(keyword_before_issue_window or 160),
             )
             if prefix:
-                groups = find_number_groups(prefix + segment)
+                groups = find_number_groups(prefix + match.group("body"))
 
         for group in groups:
             if expected_count and len(group) != expected_count:
+                continue
+            if has_duplicate_numbers(group):
                 continue
             candidates.append((segment, match.start()))
             break
@@ -641,7 +663,7 @@ def keyword_before_issue_candidates(
         if not prefix:
             continue
 
-        segment = prefix + match.group(0)
+        segment = prefix + match.group("body")
         for group in find_number_groups(segment):
             if expected_count and len(group) != expected_count:
                 continue
@@ -719,9 +741,16 @@ def select_decoded_anchor_parts(
     stop_anchor: str | None = None,
     to_end: bool = False,
 ) -> list[str]:
+    def contains(part: str, value: str) -> bool:
+        normalized_value = normalize_keyword(value)
+        return find_anchor_index(part, value) >= 0 or (
+            bool(normalized_value)
+            and normalized_value in normalize_keyword(html_to_text(part))
+        )
+
     selected: list[str] = []
     for index, part in enumerate(decoded):
-        if find_anchor_index(part, anchor) < 0:
+        if not contains(part, anchor):
             continue
         if to_end:
             selected.extend(decoded[index:])
@@ -734,7 +763,7 @@ def select_decoded_anchor_parts(
             (
                 candidate
                 for candidate in range(index, len(decoded))
-                if find_anchor_index(decoded[candidate], stop_anchor) >= 0
+                if contains(decoded[candidate], stop_anchor)
             ),
             None,
         )

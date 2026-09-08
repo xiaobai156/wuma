@@ -5,60 +5,11 @@ from typing import Any
 
 
 @dataclass(frozen=True)
-class TargetSpec:
-    id: str
-    name: str
-    url: str
-    region: str
-    count: int
-    source: dict[str, Any]
-    parse: dict[str, Any]
-    network: dict[str, Any] = field(default_factory=dict)
-    enabled: bool = True
-
-
-@dataclass(frozen=True)
-class FetchedDocument:
-    source_url: str
-    document_type: str
-    content: str
-    content_sha256: str
-    record_id: str | None = None
-
-
-@dataclass(frozen=True)
-class DocumentBundle:
-    target_id: str
-    documents: tuple[FetchedDocument, ...]
-    resolved_name: str
-
-
-@dataclass(frozen=True)
 class ResolvedContent:
     name: str
     content: str
     source_kind: str
     rendered: bool = False
-    record_id: str | None = None
-
-
-@dataclass(frozen=True)
-class ScopedDocument:
-    target_id: str
-    source_url: str
-    content: str
-    document_type: str
-    record_id: str | None = None
-
-
-@dataclass(frozen=True)
-class Candidate:
-    target_id: str
-    issue: str
-    numbers: tuple[str, ...]
-    source_url: str
-    position: int
-    segment: str
     record_id: str | None = None
 
 
@@ -69,10 +20,6 @@ class CrawlResult:
     issue: str
     numbers: list[str]
     target_id: str = ""
-
-
-ValidatedResult = CrawlResult
-
 
 @dataclass
 class CrawlFailure:

@@ -21,12 +21,6 @@ from .static_topic import crawl_static_page
 from .user_page import crawl_user_page
 
 
-CLASSIC_ARTICLE_PATTERN = re.compile(
-    r"(?:^|/)(?:article|article\.aspx|article\.aspx|gsb\.aspx)$",
-    re.IGNORECASE,
-)
-
-
 def is_classic_lottery_article(url: str) -> bool:
     path = url.split("?", 1)[0].rstrip("/")
     return bool(
@@ -103,6 +97,8 @@ def fetch_target_content(
             url,
             issues,
             title_keywords=target.get("list_title_keywords") or [configured_name],
+            decoded_anchor_only=target.get("decoded_anchor_only"),
+            decoded_anchor_chunks=target.get("decoded_anchor_chunks", 1),
         )
         return ResolvedContent(name=name, content=content, source_kind=kind)
 

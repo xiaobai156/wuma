@@ -86,6 +86,8 @@ def flatten_v2_target(item: dict, index: int) -> dict:
         raise ValueError(
             f"targets.json 第 {index} 条包含不允许字段：{sorted(unknown_target_fields)}"
         )
+    if "disabled" in item and not isinstance(item["disabled"], bool):
+        raise ValueError(f"targets.json 第 {index} 条 disabled 必须是 true/false")
     source = item.get("source")
     parse = item.get("parse")
     network = item.get("network", {})
@@ -183,6 +185,8 @@ def load_targets(
             raise ValueError(
                 f"targets.json 第 {index} 条 {name or stable_id} 不允许配置 allow_duplicate_numbers；重复号码必须失败"
             )
+        if "disabled" in item and not isinstance(item["disabled"], bool):
+            raise ValueError(f"targets.json 第 {index} 条 {name or stable_id} 的 disabled 必须是 true/false")
         if schema_version == 2:
             if not stable_id:
                 raise ValueError(f"targets.json 第 {index} 条缺少稳定 id")
@@ -197,7 +201,7 @@ def load_targets(
         parsed_url = urlparse(url)
         if not url or parsed_url.scheme not in {"http", "https"} or not parsed_url.netloc:
             raise ValueError(f"targets.json 第 {index} 条缺少有效 http(s) url")
-        if not isinstance(keywords, list) or not all(
+        if not isinstance(keywords, list) or not keywords or not all(
             str(keyword).strip() for keyword in keywords
         ):
             raise ValueError(f"targets.json 第 {index} 条 {name} 缺少有效 keywords")

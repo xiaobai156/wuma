@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from urllib.parse import urlparse
-
 from ..documents import (
     article_api_response_matches_id,
     article_record_content,
@@ -11,7 +9,7 @@ from ..documents import (
     parse_manager_article_id,
 )
 from ..errors import CrawlError, ErrorCode
-from ..network import HEADERS
+from ..network import HEADERS, ensure_same_origin
 from ..parser import (
     html_to_text,
     normalize_keyword,
@@ -19,6 +17,20 @@ from ..parser import (
     remove_fragment,
     unique_keep_order,
 )
+
+
+def _is_empty_article_body_error(exc: BaseException) -> bool:
+    return (
+        isinstance(exc, CrawlError)
+        and exc.code == ErrorCode.DOCUMENT_BOUNDARY_ERROR
+        and exc.stage == "article_record"
+        and ("缺少正文" in str(exc) or "正文无有效内容" in str(exc))
+    )
+
+
+def _allows_browser_fallback(exc: BaseException) -> bool:
+    return is_http_404(exc) or _is_empty_article_body_error(exc)
+
 
 def crawl_admin_article_page(url: str, expected_name: str) -> tuple[str, str]:
     article_id = parse_admin_article_id(url)
@@ -32,7 +44,12 @@ def crawl_admin_article_page(url: str, expected_name: str) -> tuple[str, str]:
     return crawl_article_api_payload(api_url, article_id, expected_name)
 
 
-def crawl_manager_article_page(url: str, expected_name: str) -> tuple[str, str]:
+def crawl_manager_article_page(
+    url: str,
+    expected_name: str,
+    *,
+    allow_browser_fallback: bool = True,
+) -> tuple[str, str]:
     article_id = parse_manager_article_id(url) or parse_admin_article_id(url)
     if not article_id:
         raise CrawlError(
@@ -41,7 +58,12 @@ def crawl_manager_article_page(url: str, expected_name: str) -> tuple[str, str]:
             stage="article_identity",
         )
     api_url = f"{origin(url)}/api/proxy/manager-articles/{article_id}"
-    return crawl_article_api_payload(api_url, article_id, expected_name)
+    try:
+        return crawl_article_api_payload(api_url, article_id, expected_name)
+    except Exception as exc:
+        if not allow_browser_fallback or not _allows_browser_fallback(exc):
+            raise
+        return render_article_admin_page(url, article_id, expected_name)
 
 
 def crawl_article_api_payload(
@@ -56,6 +78,8 @@ def render_article_admin_page(
     url: str,
     expected_article_id: str,
     expected_name: str,
+    *,
+    allowed_article_types: set[str] | None = None,
 ) -> tuple[str, str]:
     try:
         from playwright.sync_api import sync_playwright
@@ -67,10 +91,24 @@ def render_article_admin_page(
         ) from exc
 
     page_url = remove_fragment(url)
+    if allowed_article_types is None:
+        if parse_admin_article_id(page_url):
+            allowed_article_types = {"admin"}
+        elif parse_manager_article_id(page_url):
+            allowed_article_types = {"manager"}
+        else:
+            raise CrawlError(
+                ErrorCode.ARTICLE_ID_MISMATCH,
+                "浏览器渲染 URL 缺少受支持的文章类型",
+                stage="browser_article_identity",
+            )
     captured_records: list[tuple[str, str]] = []
     rejected_responses: list[str] = []
+    navigation_status: int | None = None
 
     try:
+        # crawl_one runs in worker threads; keep sync Playwright objects local to
+        # this call instead of sharing a browser/context across threads.
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(headless=True)
             try:
@@ -81,7 +119,7 @@ def render_article_admin_page(
                         response.url,
                         expected_article_id,
                         page_url,
-                        {"admin", "manager"},
+                        allowed_article_types,
                     ):
                         return
                     try:
@@ -94,7 +132,9 @@ def render_article_admin_page(
                         rejected_responses.append(str(exc))
 
                 page.on("response", capture_article_response)
-                page.goto(page_url, wait_until="networkidle", timeout=45000)
+                response = page.goto(page_url, wait_until="networkidle", timeout=45000)
+                navigation_status = response.status if response is not None else None
+                ensure_same_origin(page.url, page_url)
                 page.wait_for_timeout(1500)
             finally:
                 browser.close()
@@ -110,6 +150,14 @@ def render_article_admin_page(
 
     unique_records = unique_keep_order(captured_records)
     if not unique_records:
+        if navigation_status is not None and navigation_status != 200:
+            raise CrawlError(
+                ErrorCode.HTTP_FAILURE,
+                f"浏览器渲染页面 HTTP 状态异常：{navigation_status}",
+                stage="browser_render",
+                retryable=navigation_status in {408, 425, 429, 500, 502, 503, 504},
+                evidence={"http_status": navigation_status},
+            )
         detail = f"；候选响应被拒绝：{rejected_responses[0]}" if rejected_responses else ""
         raise CrawlError(
             ErrorCode.ARTICLE_ID_MISMATCH,
@@ -151,18 +199,21 @@ def crawl_admin_article_page_with_fallback(
         auto_name, content = crawl_admin_article_page(url, expected_name)
         return auto_name, content, False
     except Exception as exc:
-        if is_http_404(exc):
-            try:
-                auto_name, content = crawl_manager_article_page(url, expected_name)
-                return auto_name, content, False
-            except Exception as manager_exc:
-                if not is_http_404(manager_exc):
-                    raise
-                auto_name, content = render_article_admin_page(
-                    url, article_id, expected_name
-                )
-                return auto_name, content, True
-        raise
+        if not _allows_browser_fallback(exc):
+            raise
+        # Some admin URLs expose no admin API record but their own rendered page
+        # requests the same article ID from the manager API.  Only authorize that
+        # observed same-page response after the dedicated admin API returned 404.
+        allowed_article_types = (
+            {"admin", "manager"} if is_http_404(exc) else {"admin"}
+        )
+        auto_name, content = render_article_admin_page(
+            url,
+            article_id,
+            expected_name,
+            allowed_article_types=allowed_article_types,
+        )
+        return auto_name, content, True
 
 
 __all__ = [

@@ -448,6 +448,97 @@ def write_outputs(
     write_report(results, failures, report_file, stats)
 
 
+def append_repaired_outputs(
+    results: list[CrawlResult],
+    result_file: str,
+    failed_file: str,
+    issues: list[str],
+    targets: list[dict],
+) -> None:
+    normalized_issues = {
+        normalize_issue(issue) for issue in issues if normalize_issue(issue)
+    }
+    if len(normalized_issues) != 1:
+        raise ValueError("失败修复输出只允许单期")
+    validate_results_before_write(results, issues, targets, failures=[])
+
+    result_path = Path(result_file)
+    if not result_path.exists():
+        raise FileNotFoundError("当期成功 TXT 不存在，无法执行修复追加")
+    existing_lines = result_path.read_text(encoding="utf-8").splitlines()
+    existing_by_name: dict[str, str] = {}
+    for line in existing_lines:
+        if not line.strip():
+            continue
+        match = re.fullmatch(r"([0-9,]+)\s+(.+)", line.strip())
+        if not match:
+            raise ValueError(f"原成功 TXT 存在异常行，已停止追加：{line}")
+        name = match.group(2)
+        if name in existing_by_name:
+            raise ValueError(f"原成功 TXT 存在重复目录，已停止追加：{name}")
+        existing_by_name[name] = line.strip()
+
+    additions: list[str] = []
+    added_names: set[str] = set()
+    repaired_keys: set[tuple[str, str]] = set()
+    for item in dedupe_results(results):
+        line = f"{','.join(item.numbers)} {item.name}"
+        existing = existing_by_name.get(item.name)
+        if existing and existing != line:
+            raise ValueError(f"成功 TXT 已存在 {item.name} 的不同结果，禁止覆盖")
+        if not existing:
+            additions.append(line)
+            added_names.add(item.name)
+        repaired_keys.add((item.name, item.url))
+
+    failed_path = Path(failed_file)
+    failure_lines = (
+        failed_path.read_text(encoding="utf-8").splitlines(keepends=True)
+        if failed_path.exists()
+        else []
+    )
+    matched_failures: set[tuple[str, str]] = set()
+    remaining_failures: list[str] = []
+    for line in failure_lines:
+        stripped = line.strip()
+        matched = next(
+            (
+                key
+                for key in repaired_keys
+                if stripped.startswith(f"失败 {key[0]} {key[1]} ")
+            ),
+            None,
+        )
+        if matched is None:
+            remaining_failures.append(line)
+        else:
+            matched_failures.add(matched)
+
+    missing_failures = sorted(
+        name
+        for name, url in repaired_keys - matched_failures
+        if name in added_names
+    )
+    if missing_failures:
+        raise ValueError(
+            f"失败 TXT 没有对应待修复记录，已停止追加：{','.join(missing_failures)}"
+        )
+
+    merged_lines = [*existing_lines, *additions]
+    atomic_write_text(
+        result_path,
+        "\n".join(merged_lines) + ("\n" if merged_lines else ""),
+    )
+    if any(line.strip() for line in remaining_failures):
+        atomic_write_text(failed_path, "".join(remaining_failures))
+    else:
+        remove_stale_failure_file(failed_file)
+
+    actual_lines = result_path.read_text(encoding="utf-8").splitlines()
+    if actual_lines != merged_lines:
+        raise ValueError("修复追加后的成功 TXT 复读校验不一致")
+
+
 def remove_stale_failure_file(failed_file: str) -> None:
     path = Path(failed_file)
     if not path.exists():
@@ -499,6 +590,7 @@ __all__ = [
     'verify_result_file',
     'format_failure_line',
     'write_outputs',
+    'append_repaired_outputs',
     'remove_stale_failure_file',
     'write_report',
 ]

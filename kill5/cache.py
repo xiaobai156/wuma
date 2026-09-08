@@ -6,12 +6,19 @@ from pathlib import Path
 import re
 import time
 
-from .config import BASHU_URL
+from .config import BASHU_URL, PROJECT_ROOT
 from .domain import CrawlResult
-from .identity import canonical_url, dedupe_results, target_for_result, target_identity
+from .identity import (
+    canonical_url,
+    dedupe_results,
+    target_cache_identity,
+    target_for_result,
+    target_identity,
+)
 from .parser import (
     has_duplicate_numbers,
     normalize_issue,
+    normalize_region,
     preserve_configured_name,
     valid_number,
 )
@@ -19,13 +26,10 @@ from .storage import atomic_write_verified_bytes, file_lock
 
 def issue_key(value: str) -> str:
     digits = re.sub(r"\D+", "", str(value))
-    return str(int(digits)) if digits else ""
-
-
-def recent_issues_from_latest(latest_issue: str, count: int) -> list[str]:
-    last_issue = int(issue_key(latest_issue))
-    first_issue = max(1, last_issue - count + 1)
-    return [str(issue) for issue in range(first_issue, last_issue + 1)]
+    if not digits:
+        return ""
+    issue = int(digits)
+    return str(issue) if 1 <= issue <= 999 else ""
 
 
 @contextmanager
@@ -45,6 +49,102 @@ def atomic_write_json(path: Path, data: dict) -> None:
             raise ValueError("缓存写入后复读校验不一致")
 
     atomic_write_verified_bytes(path, content, verify)
+
+
+def _parse_cache_data(data: dict) -> tuple[list[dict], list[dict], dict[str, dict]]:
+    """Read both the legacy flat cache and the human-readable sites cache."""
+    if not isinstance(data, dict):
+        raise ValueError("缓存根对象必须是对象")
+
+    if "sites" in data:
+        sites = data.get("sites")
+        if not isinstance(sites, list):
+            raise ValueError("sites 必须是列表")
+        failures = data.get("failures", [])
+        if not isinstance(failures, list):
+            raise ValueError("failures 必须是列表")
+        records: list[dict] = []
+        identities: dict[str, dict] = {}
+        seen_site_ids: set[str] = set()
+        for index, site in enumerate(sites, start=1):
+            if not isinstance(site, dict):
+                raise ValueError(f"sites 第 {index} 条不是对象")
+            target_id = str(site.get("id") or "").strip()
+            name = str(site.get("name") or "").strip()
+            url = str(site.get("url") or "").strip()
+            fingerprint = site.get("fingerprint", {})
+            if not target_id or not name or not url:
+                raise ValueError(f"sites 第 {index} 条缺少 id/name/url")
+            if target_id in seen_site_ids:
+                raise ValueError(f"sites 存在重复稳定 ID：{target_id}")
+            seen_site_ids.add(target_id)
+            if not isinstance(fingerprint, dict):
+                raise ValueError(f"sites 第 {index} 条 fingerprint 必须是对象")
+            identity = site.get("identity")
+            if identity is not None:
+                if not isinstance(identity, dict):
+                    raise ValueError(f"sites 第 {index} 条 identity 必须是对象")
+                identities[target_id] = identity
+            for issue, numbers in fingerprint.items():
+                normalized_issue = issue_key(issue)
+                numbers_text = str(numbers or "").strip()
+                if not normalized_issue or not numbers_text:
+                    raise ValueError(
+                        f"sites 第 {index} 条 fingerprint 存在空期数或空号码"
+                    )
+                records.append(
+                    {
+                        "name": name,
+                        "url": url,
+                        "issue": normalized_issue,
+                        "numbers": numbers_text,
+                        "target_id": target_id,
+                    }
+                )
+        return records, failures, identities
+
+    if data.get("version") != 1:
+        raise ValueError("缓存根对象或 version 无效")
+    records = data.get("records")
+    if not isinstance(records, list):
+        raise ValueError("records 必须是列表")
+    failures = data.get("failures", [])
+    if not isinstance(failures, list):
+        raise ValueError("failures 必须是列表")
+    identities = data.get("target_identities", {})
+    if not isinstance(identities, dict):
+        raise ValueError("target_identities 必须是对象")
+    return records, failures, identities
+
+
+def read_cache_document(path: Path) -> tuple[list[dict], list[dict], dict[str, dict]]:
+    """Load cache data into the internal flat representation."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return _parse_cache_data(data)
+    except Exception as exc:
+        raise ValueError(f"{path.name} 读取失败：{exc}") from exc
+
+
+def ordered_issues(issue_values) -> list[str]:
+    normalized = {issue_key(issue) for issue in issue_values if issue_key(issue)}
+    issue_numbers = [int(issue) for issue in normalized]
+    crosses_year = (
+        any(issue >= 300 for issue in issue_numbers)
+        and any(issue <= 60 for issue in issue_numbers)
+    )
+
+    def recency_key(issue: str) -> int:
+        value = int(issue)
+        if crosses_year and value <= 60:
+            return value + 1000
+        return value
+
+    return sorted(normalized, key=recency_key)
+
+
+def _recent_issue_set(issue_values: set[str], recent_count: int) -> set[str]:
+    return set(ordered_issues(issue_values)[-recent_count:])
 
 
 def update_recent_duplicate_cache(
@@ -150,18 +250,14 @@ def _update_recent_duplicate_cache_locked(
 
     existing_records = []
     existing_failure_markers = []
+    existing_target_identities: dict[str, dict] = {}
     if cache_path.exists():
         try:
-            data = json.loads(cache_path.read_text(encoding="utf-8"))
-            if not isinstance(data, dict) or data.get("version") != 1:
-                raise ValueError("根对象或 version 无效")
-            records = data.get("records")
-            if not isinstance(records, list):
-                raise ValueError("records 必须是列表")
-            existing_records = records
-            existing_failure_markers = data.get("failures", [])
-            if not isinstance(existing_failure_markers, list):
-                raise ValueError("failures 必须是列表")
+            (
+                existing_records,
+                existing_failure_markers,
+                existing_target_identities,
+            ) = read_cache_document(cache_path)
         except Exception as exc:
             raise ValueError(f"{cache_path.name} 读取失败，已停止同步，避免覆盖旧缓存：{exc}") from exc
 
@@ -395,6 +491,13 @@ def _update_recent_duplicate_cache_locked(
             )
         new_by_key[key] = record
 
+    for key, record in new_by_key.items():
+        previous = existing_by_key.get(key)
+        if previous and previous["numbers"] != record["numbers"]:
+            raise ValueError(
+                f"{record['name']} {record['issue']}期 新结果与正式缓存冲突，已停止同步"
+            )
+
     existing_failures_by_key: dict[
         tuple[tuple[str, str], str], dict
     ] = {}
@@ -420,23 +523,10 @@ def _update_recent_duplicate_cache_locked(
     issue_values_by_site: dict[tuple[str, str], set[str]] = {}
     for record in [*normalized_existing, *new_records]:
         issue_values_by_site.setdefault(site_key(record), set()).add(record["issue"])
-    wanted_by_site = {}
-    for site, issue_values in issue_values_by_site.items():
-        issue_numbers = [int(issue) for issue in issue_values]
-        crosses_year = (
-            any(issue >= 300 for issue in issue_numbers)
-            and any(issue <= 60 for issue in issue_numbers)
-        )
-
-        def recency_key(issue: str) -> int:
-            value = int(issue)
-            if crosses_year and value <= 60:
-                return value + 1000
-            return value
-
-        wanted_by_site[site] = set(
-            sorted(issue_values, key=recency_key, reverse=True)[:recent_count]
-        )
+    wanted_by_site = {
+        site: _recent_issue_set(issue_values, recent_count)
+        for site, issue_values in issue_values_by_site.items()
+    }
     replacements = new_by_key
     metadata_by_site = {
         site_key(record): {
@@ -491,34 +581,130 @@ def _update_recent_duplicate_cache_locked(
         failure_issue_values_by_site.setdefault(site_key(marker), set()).add(
             marker["issue"]
         )
-    wanted_failure_by_site: dict[tuple[str, str], set[str]] = {}
-    for site, issue_values in failure_issue_values_by_site.items():
-        issue_numbers = [int(issue) for issue in issue_values]
-        crosses_year = (
-            any(issue >= 300 for issue in issue_numbers)
-            and any(issue <= 60 for issue in issue_numbers)
-        )
-
-        def failure_recency_key(issue: str) -> int:
-            value = int(issue)
-            if crosses_year and value <= 60:
-                return value + 1000
-            return value
-
-        wanted_failure_by_site[site] = set(
-            sorted(issue_values, key=failure_recency_key, reverse=True)[:recent_count]
-        )
+    wanted_failure_by_site = {
+        site: _recent_issue_set(issue_values, recent_count)
+        for site, issue_values in failure_issue_values_by_site.items()
+    }
     combined_failure_list = [
         marker
         for marker in combined_failure_markers.values()
         if marker["issue"] in wanted_failure_by_site.get(site_key(marker), set())
     ]
 
+    site_views: dict[str, dict] = {}
+
+    def ensure_site(
+        target_id: str,
+        *,
+        name: str,
+        url: str,
+        target: dict | None = None,
+        identity: dict | None = None,
+    ) -> dict:
+        site = site_views.get(target_id)
+        if site is None:
+            site = {
+                "id": target_id,
+                "name": name,
+                "url": url,
+                "pick": normalize_region(
+                    target.get("region") if target is not None else ""
+                ),
+                "browser": bool(
+                    target.get("rendered_fallback_selectors")
+                    if target is not None
+                    else False
+                ),
+                "click_first": bool(
+                    target.get("click_first") if target is not None else False
+                ),
+                "fingerprint": {},
+            }
+            site_views[target_id] = site
+        if identity is not None:
+            site["identity"] = identity
+        return site
+
+    for target in active_targets or []:
+        stable_id = str(target.get("id") or "").strip()
+        if not stable_id:
+            continue
+        ensure_site(
+            stable_id,
+            name=preserve_configured_name(target.get("name") or ""),
+            url=str(target.get("url") or ""),
+            target=target,
+            identity=target_cache_identity(
+                target,
+                project_name=PROJECT_ROOT.name,
+            ),
+        )
+
+    for target_id, identity in existing_target_identities.items():
+        stable_id = str(target_id or "").strip()
+        if (
+            not stable_id
+            or stable_id in site_views
+            or not isinstance(identity, dict)
+        ):
+            continue
+        ensure_site(
+            stable_id,
+            name=str(identity.get("site_name") or ""),
+            url=str(identity.get("url") or ""),
+            identity=identity,
+        )
+
+    for record in combined_records:
+        stable_id = str(record.get("target_id") or "").strip()
+        if not stable_id:
+            raise ValueError(
+                f"缓存记录 {record.get('name') or '未命名'} 缺少稳定目录身份，已停止同步"
+            )
+        site = ensure_site(
+            stable_id,
+            name=str(record.get("name") or ""),
+            url=str(record.get("url") or ""),
+        )
+        fingerprint = site["fingerprint"]
+        issue = issue_key(record.get("issue", ""))
+        numbers = str(record.get("numbers") or "")
+        previous = fingerprint.get(issue)
+        if previous is not None and previous != numbers:
+            raise ValueError(
+                f"缓存站点 {site['name']} {issue}期 fingerprint 存在冲突，已停止同步"
+            )
+        fingerprint[issue] = numbers
+
+    for marker in combined_failure_list:
+        stable_id = str(marker.get("target_id") or "").strip()
+        if stable_id and stable_id not in site_views:
+            target = active_by_id.get(stable_id)
+            ensure_site(
+                stable_id,
+                name=str(marker.get("name") or ""),
+                url=str(marker.get("url") or ""),
+                target=target,
+                identity=(
+                    target_cache_identity(target, project_name=PROJECT_ROOT.name)
+                    if target is not None
+                    else existing_target_identities.get(stable_id)
+                ),
+            )
+
+    for site in site_views.values():
+        site["fingerprint"] = dict(
+            (issue, site["fingerprint"][issue])
+            for issue in reversed(ordered_issues(site["fingerprint"]))
+        )
+
+    ordered_periods = ordered_issues(record["issue"] for record in combined_records)
+    base_period = int(ordered_periods[-1]) if ordered_periods else 0
     data = {
-        "version": 1,
-        "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
-        "recent_count": recent_count,
-        "records": combined_records,
+        "base_period": base_period,
+        "periods": recent_count,
+        "updated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "sites": list(site_views.values()),
         "failures": combined_failure_list,
     }
     atomic_write_json(cache_path, data)
@@ -526,9 +712,10 @@ def _update_recent_duplicate_cache_locked(
 
 __all__ = [
     'issue_key',
-    'recent_issues_from_latest',
+    'ordered_issues',
     'cache_file_lock',
     'atomic_write_json',
+    'read_cache_document',
     'update_recent_duplicate_cache',
     '_update_recent_duplicate_cache_locked',
 ]
