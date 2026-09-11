@@ -3369,6 +3369,7 @@
     {
       "id": "kill5-0182",
       "name": "财神赌经",
+      "disabled": true,
       "url": "https://i97lk4jb16.333741bbs1.shop/bbs/topic.php?id=2355",
       "region": "bottom",
       "count": 5,
@@ -4043,6 +4044,7 @@
     {
       "id": "kill5-0227",
       "name": "快马加鞭",
+      "disabled": true,
       "url": "https://88888020827.897657.xyz/bbs/topic.php?id=18564",
       "region": "bottom",
       "count": 5,
@@ -4052,6 +4054,7 @@
     {
       "id": "kill5-0228",
       "name": "开基立业",
+      "disabled": true,
       "url": "https://88888020827.897657.xyz/bbs/topic.php?id=20206",
       "region": "bottom",
       "count": 5,
@@ -4160,6 +4163,7 @@
     {
       "id": "kill5-0237",
       "name": "彩民救星",
+      "disabled": true,
       "url": "https://bbs06.933558.vip/bbs/topic.php?id=16128",
       "region": "bottom",
       "count": 5,
