@@ -777,6 +777,66 @@ def select_decoded_anchor_parts(
     return unique_keep_order(selected)
 
 
+def stats_block_header(block_keywords: list[str], issue: str) -> str:
+    parts = [
+        re.sub(r"\s+", "", str(keyword))
+        for keyword in (block_keywords or [])
+        if str(keyword).strip()
+    ]
+    if not parts:
+        return ""
+    return parts[0] + f"{normalize_issue(issue)}期" + "".join(parts[1:])
+
+
+def stats_max_row_numbers(
+    text: str,
+    issues: list[str],
+    block_keywords: list[str] | None,
+) -> dict[str, list[str]]:
+    """Read the max-count row from a dedicated statistics block.
+
+    The block header is the configured keywords with the requested issue
+    inserted between the first and the remaining keywords, e.g. ``新澳门`` +
+    ``256期`` + ``上错杀五码统计``.  Inside that block only the ``〖N次〗:NN,NN``
+    distribution rows are read, and the row whose ``N`` is largest is returned.
+    The number count is intentionally variable; legality and uniqueness are
+    enforced by the shared output and cache validators.
+    """
+    keyword_list = [
+        str(keyword)
+        for keyword in (block_keywords or [])
+        if str(keyword).strip()
+    ]
+    if not keyword_list:
+        raise CrawlError(
+            ErrorCode.DOCUMENT_BOUNDARY_ERROR,
+            "统计区块缺少专属列关键字，已停止避免取错栏",
+            stage="stats_block",
+        )
+    compact = re.sub(r"\s+", "", html_to_text(text))
+    boundary = re.compile("旧澳门|新澳门|极限每个地址")
+    row_pattern = re.compile(r"〖(\d+)次〗\s*[:：]\s*([0-9]+(?:[，,][0-9]+)*)")
+    found: dict[str, list[str]] = {}
+    for issue in issues:
+        header = stats_block_header(keyword_list, issue)
+        start = compact.find(header)
+        if start < 0:
+            continue
+        body_start = start + len(header)
+        next_boundary = boundary.search(compact, body_start)
+        block = compact[body_start: next_boundary.start() if next_boundary else len(compact)]
+        rows = [
+            (int(count), [number for number in re.split(r"[，,]", numbers) if number])
+            for count, numbers in row_pattern.findall(block)
+        ]
+        if not rows:
+            continue
+        best_count = max(count for count, _ in rows)
+        best_numbers = next(numbers for count, numbers in rows if count == best_count)
+        found[normalize_issue(issue)] = best_numbers
+    return found
+
+
 __all__ = [
     'CANDIDATE_STRICT_THRESHOLD',
     'CANDIDATE_REGION_WINDOW',
@@ -816,4 +876,6 @@ __all__ = [
     'extract_name_from_text',
     'decode_strdecode_payloads',
     'select_decoded_anchor_parts',
+    'stats_block_header',
+    'stats_max_row_numbers',
 ]

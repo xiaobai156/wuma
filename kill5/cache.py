@@ -207,7 +207,9 @@ def update_repaired_cache(
                 if not isinstance(numbers, str):
                     raise ValueError(f"{item.name} 的缓存号码格式无效")
                 values = numbers.split(",")
-                if (not cached_issue or len(values) != target["count"]
+                expected_count = target.get("count")
+                if (not cached_issue
+                        or (expected_count is not None and len(values) != int(expected_count))
                         or any(not re.fullmatch(r"[0-9]{2}", value) or not valid_number(value) for value in values)
                         or has_duplicate_numbers(values) or cached_issue in fingerprint):
                     raise ValueError(f"{item.name} 的缓存期数或号码无效/重复")
@@ -493,15 +495,20 @@ def _update_recent_duplicate_cache_locked(
             target = active_by_id.get(stable_id)
         if target is None:
             target = active_by_url.get(canonical_url(record["url"]))
-        expected_count = int(target.get("count") or 0) if target else (
-            6
-            if record["name"] == "拔树寻根" and record["url"] == BASHU_URL
-            else 5
-        )
+        if target is not None:
+            expected_count = target.get("count")
+        elif record["name"] == "拔树寻根" and record["url"] == BASHU_URL:
+            expected_count = 6
+        else:
+            expected_count = 5
         number_list = [number.strip() for number in record["numbers"].split(",")]
-        if len(number_list) != expected_count or not all(
+        if not number_list or not all(
             valid_number(number) for number in number_list
         ):
+            raise ValueError(
+                f"缓存记录 {record['name']} {record['issue']}期 号码格式或数量无效"
+            )
+        if expected_count is not None and len(number_list) != int(expected_count):
             raise ValueError(
                 f"缓存记录 {record['name']} {record['issue']}期 号码格式或数量无效"
             )

@@ -98,6 +98,8 @@ def target_cache_identity(target: dict, *, project_name: str) -> dict[str, objec
         "keyword_before_issue_window",
         "list_title_keywords",
         "position",
+        "stats_max_row",
+        "stats_block_keywords",
     )
     network_fields = ("encoding", "insecure_tls", "rendered_fallback_selectors")
     config = {

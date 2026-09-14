@@ -157,10 +157,11 @@ def formal_duplicate_matches(
         if issue not in wanted_issues:
             continue
         numbers = [number.strip() for number in numbers_text.split(",")]
-        expected_count = int(target.get("count") or 0)
+        expected_count = target.get("count")
         if (
-            len(numbers) != expected_count
+            not numbers
             or not all(valid_number(number) for number in numbers)
+            or (expected_count is not None and len(numbers) != int(expected_count))
             or has_duplicate_numbers(numbers)
         ):
             raise ValueError(

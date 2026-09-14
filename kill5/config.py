@@ -64,6 +64,8 @@ PARSE_FIELDS = {
     "keyword_before_issue_window",
     "list_title_keywords",
     "position",
+    "stats_max_row",
+    "stats_block_keywords",
 }
 ISSUE_POSITION_WINDOW = 3
 NETWORK_FIELDS = {
@@ -264,6 +266,29 @@ def load_targets(
                 f"targets.json 第 {index} 条 {name} 的 decoded_anchor_to_end 与 decoded_stop_anchor 不能同时配置"
             )
 
+        stats_max_row = item.get("stats_max_row")
+        if stats_max_row is not None and not isinstance(stats_max_row, bool):
+            raise ValueError(
+                f"targets.json 第 {index} 条 {name} 的 stats_max_row 必须是 true/false"
+            )
+        stats_block_keywords = item.get("stats_block_keywords")
+        if stats_max_row:
+            if (
+                not isinstance(stats_block_keywords, list)
+                or not stats_block_keywords
+                or not all(
+                    isinstance(keyword, str) and keyword.strip()
+                    for keyword in stats_block_keywords
+                )
+            ):
+                raise ValueError(
+                    f"targets.json 第 {index} 条 {name} 的 stats_max_row=true 时必须配置非空 stats_block_keywords 列表"
+                )
+        elif stats_block_keywords is not None:
+            raise ValueError(
+                f"targets.json 第 {index} 条 {name} 未启用 stats_max_row，不允许配置 stats_block_keywords"
+            )
+
         count = item.get("count")
         is_bashu_exception = (
             name == "拔树寻根"
@@ -275,7 +300,12 @@ def load_targets(
             )
             and region in {"top", "上", "顶部"}
         )
-        if count != 5 and not is_bashu_exception:
+        if stats_max_row:
+            if count is not None:
+                raise ValueError(
+                    f"targets.json 第 {index} 条 {name} 的 stats_max_row=true 时 count 必须为 null（号码个数可变）"
+                )
+        elif count != 5 and not is_bashu_exception:
             raise ValueError(
                 f"targets.json 第 {index} 条 {name} 的 count 必须固定为 5；拔树寻根允许 count=6 例外"
             )

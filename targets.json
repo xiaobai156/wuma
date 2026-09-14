@@ -4254,6 +4254,20 @@
         "first_issue_chain": true,
         "issue_position_window": 3
       }
+    },
+    {
+      "id": "kill5-0243",
+      "name": "上错统计",
+      "url": "https://www.jx438.com/index.php?fid=3",
+      "region": "bottom",
+      "count": null,
+      "source": { "kind": "list_detail" },
+      "parse": {
+        "keywords": ["上错统计"],
+        "list_title_keywords": ["上错统计"],
+        "stats_max_row": true,
+        "stats_block_keywords": ["新澳门", "上错杀五码统计"]
+      }
     }
   ]
 }

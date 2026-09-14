@@ -289,8 +289,10 @@ def validate_results_before_write(
             errors.append(f"{item.name} {item.url} {item.issue}期 不在本次指定期数内")
         issues_by_site.setdefault(target_key, set()).add(issue)
 
-        expected_count = int(target.get("count") or 0)
-        if len(item.numbers) != expected_count:
+        expected_count = target.get("count")
+        if not item.numbers:
+            errors.append(f"{item.name} {item.url} {issue}期 号码为空")
+        elif expected_count is not None and len(item.numbers) != int(expected_count):
             errors.append(
                 f"{item.name} {item.url} {issue}期 号码数量 {len(item.numbers)} 不等于配置 count={expected_count}"
             )

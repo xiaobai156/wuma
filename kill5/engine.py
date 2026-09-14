@@ -15,7 +15,7 @@ from .documents import (
     parse_user_id,
 )
 from .network import request_scope
-from .parser import normalize_issue, preserve_configured_name
+from .parser import normalize_issue, preserve_configured_name, stats_max_row_numbers
 from .validator import (
     detect_available_issues,
     diagnose_issue_mismatch,
@@ -202,6 +202,56 @@ def crawl_one(
                 stage="content_status",
                 evidence={"issues": list(issues)},
             )
+
+        if target.get("stats_max_row"):
+            issue_map = stats_max_row_numbers(
+                content,
+                issues,
+                target.get("stats_block_keywords"),
+            )
+            missing_issues = [issue for issue in issues if issue not in issue_map]
+            if missing_issues:
+                wanted = ",".join(f"{issue}期" for issue in missing_issues)
+                keywords_text = "、".join(
+                    str(keyword)
+                    for keyword in (target.get("stats_block_keywords") or [])
+                )
+                reason = (
+                    f"没有找到 {wanted} 的专属统计区块（{keywords_text}）"
+                    "或该区块没有统计结果行"
+                )
+                debug_path = save_debug_page(
+                    target,
+                    issues,
+                    name,
+                    content,
+                    reason,
+                    debug_dir=debug_dir,
+                )
+                if debug_path:
+                    reason = f"{reason}；调试页面：{debug_path.name}"
+                return [], build_failure(
+                    target,
+                    name,
+                    reason,
+                    ErrorCode.ISSUE_NOT_FOUND,
+                    stage="issue_validation",
+                    evidence={
+                        "issues": list(issues),
+                        "missing_issues": list(missing_issues),
+                    },
+                )
+            results = [
+                CrawlResult(
+                    url=url,
+                    name=name,
+                    issue=issue,
+                    numbers=numbers,
+                    target_id=str(target.get("id") or ""),
+                )
+                for issue, numbers in issue_map.items()
+            ]
+            return results, None
 
         try:
             issue_map = extract_issue_numbers(
