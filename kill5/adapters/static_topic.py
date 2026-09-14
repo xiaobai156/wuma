@@ -1,12 +1,19 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextvars import copy_context
 import html
 import re
 from urllib.parse import urljoin, urlparse
 
 from ..errors import CrawlError, ErrorCode, classify_exception
-from ..network import HEADERS, ensure_same_origin, fetch_text, origin_key
+from ..network import (
+    HEADERS,
+    ensure_same_origin,
+    fetch_text,
+    origin_key,
+    remaining_target_time,
+)
 from ..parser import (
     DOCUMENT_BOUNDARY,
     decode_strdecode_payloads,
@@ -91,7 +98,7 @@ def crawl_static_page(
         required_errors: list[tuple[str, BaseException]] = []
         with ThreadPoolExecutor(max_workers=min(SCRIPT_WORKERS, len(urls))) as executor:
             future_map = {
-                executor.submit(fetch_script_parts, src): (index, src)
+                executor.submit(copy_context().run, fetch_script_parts, src): (index, src)
                 for index, src in enumerate(urls)
             }
             for future in as_completed(future_map):
@@ -162,7 +169,11 @@ def render_static_page(
             browser = playwright.chromium.launch(headless=True)
             try:
                 page = browser.new_page(user_agent=HEADERS["User-Agent"], locale="zh-CN")
-                response = page.goto(page_url, wait_until="networkidle", timeout=45000)
+                response = page.goto(
+                    page_url,
+                    wait_until="networkidle",
+                    timeout=max(1, int(remaining_target_time(45.0) * 1000)),
+                )
                 if response is not None and response.status != 200:
                     raise CrawlError(
                         ErrorCode.HTTP_FAILURE,
@@ -172,7 +183,7 @@ def render_static_page(
                         evidence={"http_status": response.status},
                     )
                 ensure_same_origin(page.url, page_url)
-                page.wait_for_timeout(1500)
+                page.wait_for_timeout(int(remaining_target_time(1.5) * 1000))
 
                 for selector in selectors:
                     locator = page.locator(selector)

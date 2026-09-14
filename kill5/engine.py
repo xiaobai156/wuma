@@ -14,7 +14,7 @@ from .documents import (
     parse_manager_article_id,
     parse_user_id,
 )
-from .network import request_scope
+from .network import request_scope, target_deadline
 from .parser import normalize_issue, preserve_configured_name, stats_max_row_numbers
 from .validator import (
     detect_available_issues,
@@ -127,7 +127,7 @@ def save_debug_page(
     return path
 
 
-def crawl_one(
+def _crawl_one(
     target: dict,
     issues: list[str],
     *,
@@ -481,6 +481,16 @@ def crawl_one(
             reason=reason,
             issues=issues,
         )
+
+
+def crawl_one(
+    target: dict,
+    issues: list[str],
+    *,
+    debug_dir: Path = DEFAULT_DEBUG_DIR,
+) -> tuple[list[CrawlResult], CrawlFailure | None]:
+    with target_deadline():
+        return _crawl_one(target, issues, debug_dir=debug_dir)
 
 
 def blocked_by_local_socket_policy(failures: list[CrawlFailure]) -> bool:

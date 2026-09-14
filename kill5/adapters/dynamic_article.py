@@ -9,7 +9,7 @@ from ..documents import (
     parse_manager_article_id,
 )
 from ..errors import CrawlError, ErrorCode
-from ..network import HEADERS, ensure_same_origin
+from ..network import HEADERS, ensure_same_origin, remaining_target_time
 from ..parser import (
     html_to_text,
     normalize_keyword,
@@ -132,10 +132,14 @@ def render_article_admin_page(
                         rejected_responses.append(str(exc))
 
                 page.on("response", capture_article_response)
-                response = page.goto(page_url, wait_until="networkidle", timeout=45000)
+                response = page.goto(
+                    page_url,
+                    wait_until="networkidle",
+                    timeout=max(1, int(remaining_target_time(45.0) * 1000)),
+                )
                 navigation_status = response.status if response is not None else None
                 ensure_same_origin(page.url, page_url)
-                page.wait_for_timeout(1500)
+                page.wait_for_timeout(int(remaining_target_time(1.5) * 1000))
             finally:
                 browser.close()
     except CrawlError:

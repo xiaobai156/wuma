@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+from contextvars import ContextVar
 import gzip
 import random
 import re
@@ -19,6 +20,7 @@ from .errors import CrawlError, ErrorCode, classify_exception
 
 REQUEST_RETRIES = 5
 HOST_MIN_INTERVAL = 0.7
+TARGET_TIMEOUT_SECONDS = 120.0
 PLACEHOLDER_PAGE_MARKERS = (
     "Welcome to OpenResty!",
     "Further configuration is required",
@@ -50,6 +52,33 @@ def create_ssl_context() -> ssl.SSLContext:
 
 SSL_CONTEXT = create_ssl_context()
 T = TypeVar("T")
+_ACTIVE_TARGET_DEADLINE: ContextVar[float | None] = ContextVar(
+    "active_target_deadline", default=None
+)
+
+
+def remaining_target_time(default: float | None = None) -> float | None:
+    deadline = _ACTIVE_TARGET_DEADLINE.get()
+    if deadline is None:
+        return default
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise CrawlError(
+            ErrorCode.NETWORK_TIMEOUT,
+            f"单个站点抓取超过 {TARGET_TIMEOUT_SECONDS:.0f} 秒总时限",
+            stage="network_timeout",
+            retryable=False,
+        )
+    return remaining if default is None else min(default, remaining)
+
+
+@contextmanager
+def target_deadline(seconds: float = TARGET_TIMEOUT_SECONDS) -> Iterator[None]:
+    token = _ACTIVE_TARGET_DEADLINE.set(time.monotonic() + seconds)
+    try:
+        yield
+    finally:
+        _ACTIVE_TARGET_DEADLINE.reset(token)
 
 
 class ResponseCache:
@@ -85,7 +114,16 @@ class ResponseCache:
                     event.set()
                 return value
 
-            event.wait()
+            wait_timeout = remaining_target_time()
+            if wait_timeout is not None and not event.wait(wait_timeout):
+                raise CrawlError(
+                    ErrorCode.NETWORK_TIMEOUT,
+                    "等待同一网络请求超过单个站点总时限",
+                    stage="network_cache_wait",
+                    retryable=False,
+                )
+            if wait_timeout is None:
+                event.wait()
 
 
 _REQUEST_SCOPE_LOCK = threading.Lock()
@@ -129,7 +167,13 @@ def wait_for_host_slot(url: str) -> None:
         elapsed = time.monotonic() - _HOST_LAST_REQUEST.get(key, 0.0)
         wait_time = HOST_MIN_INTERVAL - elapsed
         if wait_time > 0:
-            time.sleep(wait_time + random.uniform(0.05, 0.25))
+            delay = wait_time + random.uniform(0.05, 0.25)
+            remaining = remaining_target_time()
+            if remaining is not None:
+                time.sleep(min(delay, remaining))
+                remaining_target_time()
+            else:
+                time.sleep(delay)
         _HOST_LAST_REQUEST[key] = time.monotonic()
 
 
@@ -185,6 +229,9 @@ def curl_fetch_bytes(
             stage="network_curl",
         )
 
+    request_timeout = remaining_target_time(timeout)
+    if request_timeout is None:
+        request_timeout = timeout
     cmd = [
         curl,
         "--location",
@@ -198,11 +245,11 @@ def curl_fetch_bytes(
         cmd.append("--insecure")
     cmd.extend([
         "--connect-timeout",
-        str(min(15, timeout)),
+        str(min(15, request_timeout)),
         "--max-time",
-        str(timeout),
+        str(request_timeout),
         "--retry",
-        "2",
+        "0" if _ACTIVE_TARGET_DEADLINE.get() is not None else "2",
         "--retry-delay",
         "2",
         "--retry-all-errors",
@@ -218,7 +265,19 @@ def curl_fetch_bytes(
         "Accept-Encoding: identity",
         url,
     ])
-    proc = subprocess.run(cmd, capture_output=True)
+    try:
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            timeout=(request_timeout + 2 if _ACTIVE_TARGET_DEADLINE.get() is not None else None),
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise CrawlError(
+            ErrorCode.NETWORK_TIMEOUT,
+            "curl 请求超过单个站点总时限",
+            stage="network_curl",
+            retryable=False,
+        ) from exc
     if proc.returncode != 0:
         stderr = proc.stderr.decode("utf-8", errors="replace").strip()
         if not stderr:
@@ -261,11 +320,21 @@ def fetch_bytes(
     context = ssl._create_unverified_context() if use_insecure_tls else SSL_CONTEXT
     for attempt in range(REQUEST_RETRIES):
         try:
+            request_timeout = remaining_target_time(timeout)
+            if request_timeout is None:
+                request_timeout = timeout
             wait_for_host_slot(url)
             req = Request(url, headers=HEADERS)
-            with urlopen(req, timeout=timeout, context=context) as resp:
+            with urlopen(req, timeout=request_timeout, context=context) as resp:
                 ensure_same_origin(resp.geturl(), url)
-                data = resp.read()
+                chunks = []
+                while True:
+                    remaining_target_time()
+                    chunk = resp.read(64 * 1024)
+                    if not chunk:
+                        break
+                    chunks.append(chunk)
+                data = b"".join(chunks)
                 if is_openresty_placeholder(data):
                     raise CrawlError(
                         ErrorCode.HTTP_FAILURE,
@@ -281,7 +350,12 @@ def fetch_bytes(
                 break
             if attempt < REQUEST_RETRIES - 1:
                 delay = min(8.0, 0.9 * (2 ** attempt)) + random.uniform(0.2, 0.8)
-                time.sleep(delay)
+                remaining = remaining_target_time()
+                if remaining is not None:
+                    time.sleep(min(delay, remaining))
+                    remaining_target_time()
+                else:
+                    time.sleep(delay)
     if last_error and is_retryable_network_error(last_error) and not is_openresty_placeholder_error(last_error):
         try:
             wait_for_host_slot(url)
@@ -377,12 +451,15 @@ def fetch_text(
 __all__ = [
     'REQUEST_RETRIES',
     'HOST_MIN_INTERVAL',
+    'TARGET_TIMEOUT_SECONDS',
     'PLACEHOLDER_PAGE_MARKERS',
     'HEADERS',
     'create_ssl_context',
     'host_key',
     'host_lock',
     'wait_for_host_slot',
+    'remaining_target_time',
+    'target_deadline',
     'is_retryable_network_error',
     'is_openresty_placeholder',
     'is_openresty_placeholder_error',
