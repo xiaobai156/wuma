@@ -61,6 +61,7 @@
     {
       "id": "kill5-0004",
       "name": "八方聚宝",
+      "disabled": true,
       "url": "https://bbs03.836386.cyou/bbs/topic.php?id=16486",
       "region": "bottom",
       "count": 5,
