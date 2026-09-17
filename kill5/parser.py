@@ -604,7 +604,7 @@ def issue_position_window_starts(
     if not issue_position_window:
         return None
 
-    candidates: list[tuple[str, int]] = []
+    candidates: list[tuple[str, int, str]] = []
     for match in all_issue_segment_matches(text):
         segment = match.group(0)
         groups = (
@@ -630,16 +630,55 @@ def issue_position_window_starts(
                 continue
             if has_duplicate_numbers(group):
                 continue
-            candidates.append((segment, match.start()))
+            candidates.append((segment, match.start(), normalize_issue(match.group(1))))
             break
 
-    region = normalize_region(region)
     ordered = sorted(candidates, key=lambda item: item[1])
-    if region == "bottom":
-        selected = ordered[-issue_position_window:]
-    else:
+    if len(ordered) <= issue_position_window:
+        return {start for _segment, start, _issue in ordered}
+
+    # “最新 N 条”指文档顺序里最靠后的 N 条同栏目区块。多数页面按升序排列期数
+    # （最新期在最后），但部分页面把最新期放在最前（降序），此时取尾部会选中
+    # 较旧期并把最新期排除在窗口外，导致当期永远取不到。
+    # 这里只按文档顺序判断该页是升序还是降序，不按期号数值排序——期号会在
+    # 365→1 处跨年回绕，按数值取最大会选到上一年周期的期号。
+    issues = [int(issue) for _segment, _start, issue in ordered]
+    newest_index = _newest_document_index(issues)
+    # 最新的那一期若出现在前半段，说明页面把最新期排在前面（降序）。
+    descending = newest_index < len(ordered) / 2
+    if descending:
         selected = ordered[:issue_position_window]
-    return {start for _segment, start in selected}
+    else:
+        selected = ordered[-issue_position_window:]
+    return {start for _segment, start, _issue in selected}
+
+
+def _newest_document_index(issues: list[int]) -> int:
+    """Return the index of the most recent issue under a circular 365-day order.
+
+    ``issues`` is in document order.  A period-number cycle wraps after 365, so
+    the newest block is the one that lies "after" the most other blocks: the sum
+    of its forward gaps to every other block is largest.  Ties (repeated numbers
+    across cycles) keep the earliest document position, because a descending
+    page lists its newest block first.
+    """
+    total = 365
+
+    def forward_gap(later: int, earlier: int) -> int:
+        gap = (later - earlier) % total
+        return gap if gap else total
+
+    best_index = 0
+    best_score: int | None = None
+    for index, candidate in enumerate(issues):
+        score = sum(
+            0 if other == index else forward_gap(issues[other], candidate)
+            for other in range(len(issues))
+        )
+        if best_score is None or score > best_score:
+            best_score = score
+            best_index = index
+    return best_index
 
 
 def keyword_before_issue_candidates(
