@@ -12,6 +12,7 @@ from .errors import CrawlError, ErrorCode
 
 CANDIDATE_STRICT_THRESHOLD = 30
 CANDIDATE_REGION_WINDOW = 3
+ISSUE_CYCLE = 365
 USER_RECORD_BOUNDARY = "[[USER_RECORD_BOUNDARY]]"
 DOCUMENT_BOUNDARY = "[[DOCUMENT_BOUNDARY]]"
 OTHER_DATA_COLUMN_PATTERN = re.compile(
@@ -637,48 +638,40 @@ def issue_position_window_starts(
     if len(ordered) <= issue_position_window:
         return {start for _segment, start, _issue in ordered}
 
-    # “最新 N 条”指文档顺序里最靠后的 N 条同栏目区块。多数页面按升序排列期数
-    # （最新期在最后），但部分页面把最新期放在最前（降序），此时取尾部会选中
-    # 较旧期并把最新期排除在窗口外，导致当期永远取不到。
-    # 这里只按文档顺序判断该页是升序还是降序，不按期号数值排序——期号会在
-    # 365→1 处跨年回绕，按数值取最大会选到上一年周期的期号。
+    # “最新 N 条”指最近 N 期。多数页面按期数升序排列（最新期在最后），取尾部即可；
+    # 但部分页面把最新期排在最前（降序），此时取尾部会选中较旧期、把最新期排除在
+    # 窗口外，导致当期永远取不到。
+    # 判据用 365 周期回绕比较，不按期号数值排序：期号会在 365→1 处回绕，页面尾部
+    # 也可能出现“上一圈”的更高期号（例如首条 261、尾部 267）。
     issues = [int(issue) for _segment, _start, issue in ordered]
-    newest_index = _newest_document_index(issues)
-    # 最新的那一期若出现在前半段，说明页面把最新期排在前面（降序）。
-    descending = newest_index < len(ordered) / 2
-    if descending:
+    if _page_lists_newest_first(issues):
         selected = ordered[:issue_position_window]
     else:
         selected = ordered[-issue_position_window:]
     return {start for _segment, start, _issue in selected}
 
 
-def _newest_document_index(issues: list[int]) -> int:
-    """Return the index of the most recent issue under a circular 365-day order.
+def _page_lists_newest_first(issues: list[int]) -> bool:
+    """Return True when the page plausibly lists its newest block first.
 
-    ``issues`` is in document order.  A period-number cycle wraps after 365, so
-    the newest block is the one that lies "after" the most other blocks: the sum
-    of its forward gaps to every other block is largest.  Ties (repeated numbers
-    across cycles) keep the earliest document position, because a descending
-    page lists its newest block first.
+    ``issues`` is in document order.  The step between neighbouring blocks is
+    either ``+1`` (期号递增，最新期在最后) or, expressed inside the 365 cycle,
+    ``364`` (= -1，期号递减，最新期在最前).  Whichever step dominates decides the
+    page's direction: more ``-1`` steps means the newest block is first.
+
+    Doubt returns False on purpose: the tail window is the historical behaviour.
     """
-    total = 365
-
-    def forward_gap(later: int, earlier: int) -> int:
-        gap = (later - earlier) % total
-        return gap if gap else total
-
-    best_index = 0
-    best_score: int | None = None
-    for index, candidate in enumerate(issues):
-        score = sum(
-            0 if other == index else forward_gap(issues[other], candidate)
-            for other in range(len(issues))
-        )
-        if best_score is None or score > best_score:
-            best_score = score
-            best_index = index
-    return best_index
+    if len(issues) < 2:
+        return False
+    forward = 0
+    backward = 0
+    for previous, current in zip(issues, issues[1:]):
+        step = (current - previous) % ISSUE_CYCLE
+        if step == 1:
+            forward += 1
+        elif step == ISSUE_CYCLE - 1:
+            backward += 1
+    return backward > forward
 
 
 def keyword_before_issue_candidates(
