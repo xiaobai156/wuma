@@ -740,7 +740,7 @@
           "5码"
         ],
         "decoded_anchor_only": "阿谀奉承 发表于",
-        "decoded_anchor_chunks": 1,
+        "decoded_anchor_chunks": 2,
         "first_issue_chain": true
       }
     },
@@ -2566,8 +2566,8 @@
           "5码"
         ],
         "anchor": "全网独有",
-        "decoded_anchor_only": "[绝杀5码]全网独有!",
-        "decoded_anchor_chunks": 2,
+        "decoded_anchor_only": "[绝杀5码]全网独有",
+        "decoded_anchor_chunks": 3,
         "first_issue_chain": true
       }
     },
