@@ -4271,6 +4271,35 @@
         "stats_max_row": true,
         "stats_block_keywords": ["新澳门", "上错杀五码统计"]
       }
+    },
+    {
+      "id": "kill5-0244",
+      "name": "公主上",
+      "url": "http://www.2018512.com/read.php?tid=15&fpage=1&page=3",
+      "region": "bottom",
+      "count": 3,
+      "source": { "kind": "static_topic" },
+      "parse": {
+        "keywords": ["依然公主尽位杀码"],
+        "anchor": "依然公主尽位杀码",
+        "stop_anchor": "依然公主首位杀码",
+        "issue_position_window": 3
+      },
+      "network": { "encoding": "gb18030" }
+    },
+    {
+      "id": "kill5-0245",
+      "name": "公主下",
+      "url": "http://www.2018512.com/read.php?tid=15&fpage=1&page=3",
+      "region": "bottom",
+      "count": 3,
+      "source": { "kind": "static_topic" },
+      "parse": {
+        "keywords": ["依然公主首位杀码"],
+        "anchor": "依然公主首位杀码",
+        "issue_position_window": 3
+      },
+      "network": { "encoding": "gb18030" }
     }
   ]
 }

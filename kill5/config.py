@@ -26,6 +26,8 @@ CONFIG_REGIONS = {
     "底部",
 }
 BASHU_URL = "https://zcphjs.ce83x-ms2rz-orwude.work:12277/#/users/116164"
+GONGZHU_URL = "http://www.2018512.com/read.php?tid=15&fpage=1&page=3"
+GONGZHU_NAMES = {"公主上", "公主下"}
 INSECURE_TLS_TARGET = (
     "倦鸟归林",
     "https://nlafoq9v.dh5565656.xyz/bbs/topic.php?id=918",
@@ -219,7 +221,11 @@ def load_targets(
         if name in names:
             raise ValueError(f"targets.json 存在同名目录：{name}")
         normalized_url = canonical_url(url)
-        if normalized_url in urls:
+        is_gongzhu_target = (
+            normalized_url == canonical_url(GONGZHU_URL)
+            and name in GONGZHU_NAMES
+        )
+        if normalized_url in urls and not is_gongzhu_target:
             raise ValueError(f"targets.json 存在重复 URL：{url}")
         if "insecure_tls" in item and not isinstance(item["insecure_tls"], bool):
             raise ValueError(
@@ -300,14 +306,20 @@ def load_targets(
             )
             and region in {"top", "上", "顶部"}
         )
+        is_gongzhu_exception = (
+            is_gongzhu_target
+            and count == 3
+            and region in {"bottom", "lower", "tail", "last", "下", "尾部", "底部"}
+            and source_kind == "static_topic"
+        )
         if stats_max_row:
             if count is not None:
                 raise ValueError(
                     f"targets.json 第 {index} 条 {name} 的 stats_max_row=true 时 count 必须为 null（号码个数可变）"
                 )
-        elif count != 5 and not is_bashu_exception:
+        elif count != 5 and not (is_bashu_exception or is_gongzhu_exception):
             raise ValueError(
-                f"targets.json 第 {index} 条 {name} 的 count 必须固定为 5；拔树寻根允许 count=6 例外"
+                f"targets.json 第 {index} 条 {name} 的 count 必须固定为 5；仅允许已配置的特例"
             )
         names.add(name)
         urls.add(normalized_url)

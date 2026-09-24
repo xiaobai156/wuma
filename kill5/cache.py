@@ -183,8 +183,7 @@ def update_repaired_cache(
             identity = target_cache_identity(target, project_name=PROJECT_ROOT.name)
             index = by_id.get(stable_id)
             if index is None:
-                if any(canonical_url(site["url"]) == canonical_url(item.url)
-                       or site["name"] == item.name for site in sites):
+                if any(site["name"] == item.name for site in sites):
                     raise ValueError(f"{item.name} 的缓存名称或 URL 已绑定其他稳定 ID")
                 site = dict(id=stable_id, name=item.name, url=item.url,
                             pick=normalize_region(target.get("region")),
@@ -335,7 +334,7 @@ def _update_recent_duplicate_cache_locked(
     failure_markers: list[dict] | None = None,
 ) -> None:
     active_by_id: dict[str, dict] = {}
-    active_by_url: dict[str, dict] = {}
+    active_by_url: dict[str, list[dict]] = {}
     for target in active_targets or []:
         stable_id = str(target.get("id") or "").strip()
         name = preserve_configured_name(target.get("name") or "")
@@ -345,11 +344,13 @@ def _update_recent_duplicate_cache_locked(
             if stable_id in active_by_id:
                 raise ValueError(f"启用目标存在重复稳定 ID：{stable_id}")
             active_by_id[stable_id] = target
-        if url_key in active_by_url:
-            raise ValueError(f"启用目标存在重复规范化 URL：{url}")
         if not name or not url_key:
             raise ValueError("启用目标缺少 name 或 url")
-        active_by_url[url_key] = target
+        active_by_url.setdefault(url_key, []).append(target)
+
+    def unique_target_by_url(url: str) -> dict | None:
+        candidates = active_by_url.get(canonical_url(url), [])
+        return candidates[0] if len(candidates) == 1 else None
 
     existing_records = []
     existing_failure_markers = []
@@ -403,7 +404,7 @@ def _update_recent_duplicate_cache_locked(
         if stable_id:
             target = active_by_id.get(stable_id)
         else:
-            target = active_by_url.get(canonical_url(record["url"]))
+            target = unique_target_by_url(record["url"])
         if target is None:
             if required or not stable_id:
                 raise ValueError(
@@ -462,7 +463,7 @@ def _update_recent_duplicate_cache_locked(
         stable_id = str(record.get("target_id") or "").strip()
         target = active_by_id.get(stable_id) if stable_id else None
         if target is None:
-            target = active_by_url.get(canonical_url(record["url"]))
+            target = unique_target_by_url(record["url"])
         if target is None:
             if required:
                 raise ValueError(
@@ -494,7 +495,7 @@ def _update_recent_duplicate_cache_locked(
         if stable_id:
             target = active_by_id.get(stable_id)
         if target is None:
-            target = active_by_url.get(canonical_url(record["url"]))
+            target = unique_target_by_url(record["url"])
         if target is not None:
             expected_count = target.get("count")
         elif record["name"] == "拔树寻根" and record["url"] == BASHU_URL:
