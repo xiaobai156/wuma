@@ -15,6 +15,12 @@ from ..parser import (
 )
 from .static_topic import crawl_static_page
 
+# 列表版块最多翻这么多页。当期帖子未发布时，版块可能有上百页，翻完会白跑很久并撞上
+# 120 秒单站时限，把「本期未发布」误报成网络超时；到上限仍未命中就按未找到处理，
+# 由上层报 ISSUE_NOT_FOUND。
+MAX_LIST_PAGES = 5
+
+
 def crawl_list_detail_page(
     url: str,
     issues: list[str],
@@ -30,7 +36,9 @@ def crawl_list_detail_page(
     wanted_issues = [normalize_issue(issue) for issue in issues]
     seen_pages = set()
     page_url = list_url
-    while page_url and page_url not in seen_pages:
+    pages_fetched = 0
+    while page_url and page_url not in seen_pages and pages_fetched < MAX_LIST_PAGES:
+        pages_fetched += 1
         seen_pages.add(page_url)
         list_page = fetch_text(page_url)
         next_page = None

@@ -23,7 +23,7 @@
 - 成功 TXT 每行格式固定为：`号码,号码,号码,号码,号码 目录名`，不得附加期数、生肖或说明。
 - 每个启用站点必须使用真实页面已确认的栏目/正文锚点；不能用号码格式猜栏目，也不能用网站地址代替正文锚点。
 - `/article/admin/`、`/article/manager/`、`/article/lottery/` 按 URL 文章 ID 及同 ID 身份校验；`#/users/<id>` 按 URL 用户 ID 绑定记录。
-- `list_detail: true` 必须先在列表页按 `list_title_keywords` 锁定详情，再在同一详情文档取数。
+- `list_detail: true` 必须先在列表页按 `list_title_keywords` 锁定详情，再在同一详情文档取数；列表页最多翻 `kill5/adapters/list_detail.py` 的 `MAX_LIST_PAGES = 5` 页，未命中就按「本期未发布」失败，不得翻完整版块撞 120 秒单站时限。
 - 可用的站点专属边界字段：`anchor`、`stop_anchor`、`first_issue_chain`、`issue_position_window`、`decoded_anchor_only`、`decoded_anchor_chunks`、`decoded_stop_anchor`、`decoded_anchor_to_end`、`rendered_fallback_selectors`、`encoding`、`insecure_tls`、`list_detail`、`list_title_keywords`、`keyword_before_issue`、`keyword_before_issue_window`。只有真实验证需要时才能配置。
 
 ## top / bottom
