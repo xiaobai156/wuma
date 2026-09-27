@@ -4301,6 +4301,22 @@
         "issue_position_window": 3
       },
       "network": { "encoding": "gb18030" }
+    },
+    {
+      "id": "kill5-0246",
+      "name": "寝食不安",
+      "url": "https://qpdddzt.1pii1-a6yng-eudfwb.cyou:17477/topic/207075.html",
+      "region": "bottom",
+      "count": 5,
+      "source": { "kind": "decoded_script" },
+      "parse": {
+        "keywords": ["绝杀五码"],
+        "anchor": "作者:寝食不安",
+        "decoded_anchor_only": "作者:寝食不安",
+        "decoded_anchor_to_end": true,
+        "first_issue_chain": true,
+        "issue_position_window": 3
+      }
     }
   ]
 }
