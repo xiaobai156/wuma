@@ -2631,6 +2631,7 @@
     {
       "id": "kill5-0142",
       "name": "金吊桶",
+      "disabled": true,
       "url": "https://llbpelz.mkyqu-q918k-hammci.xyz:16677/",
       "region": "top",
       "count": 5,
@@ -2709,6 +2710,7 @@
     {
       "id": "kill5-0146",
       "name": "横行天下",
+      "disabled": true,
       "url": "https://pvxiftuf.yumkw-u4s81-hpytyz.work:16677/topic/573878.html",
       "region": "bottom",
       "count": 5,
