@@ -3894,6 +3894,7 @@
     {
       "id": "kill5-0210",
       "name": "天下富甲",
+      "disabled": true,
       "url": "https://0130190827.673454.xyz/bbs/topic.php?id=20148",
       "region": "bottom",
       "count": 5,
