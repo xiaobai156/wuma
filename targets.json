@@ -813,6 +813,7 @@
     {
       "id": "kill5-0042",
       "name": "公式稳砍",
+      "disabled": true,
       "url": "https://tetinte.nzxzd-cfket-xtgznp.xyz:16677/topic/592475.html",
       "region": "bottom",
       "count": 5,
