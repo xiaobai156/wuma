@@ -4324,6 +4324,22 @@
         "first_issue_chain": true,
         "issue_position_window": 3
       }
+    },
+    {
+      "id": "kill5-0247",
+      "name": "民不聊生",
+      "url": "https://drwxuj.02eli-zt6ko-oeolgq.cyou:17455/topic/799952.html",
+      "region": "top",
+      "count": 5,
+      "source": { "kind": "decoded_script" },
+      "parse": {
+        "keywords": ["绝杀五码"],
+        "anchor": "作者:民不聊生",
+        "decoded_anchor_only": "作者:民不聊生",
+        "decoded_anchor_chunks": 2,
+        "first_issue_chain": true,
+        "issue_position_window": 3
+      }
     }
   ]
 }
