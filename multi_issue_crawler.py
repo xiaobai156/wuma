@@ -31,7 +31,8 @@ def main() -> int:
     )
     parser.add_argument("--issues", nargs="+")
     parser.add_argument("--workers", type=int, default=16)
-    parser.add_argument("--retry-passes", type=int, default=2)
+    parser.add_argument("--retry-passes", type=int, default=0,
+                        help="网络失败后的慢速补抓轮数，默认 0（不自动补抓）；需要时手动指定轮数")
     args = parser.parse_args()
 
     raw = " ".join(args.issues or [])
