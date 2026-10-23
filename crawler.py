@@ -13,7 +13,7 @@ from kill5.services import ProductionRunService, cache_update_allowed
 
 DEFAULT_ISSUES = "128"
 DEFAULT_WORKERS = 8
-DEFAULT_RETRY_PASSES = 2
+DEFAULT_RETRY_PASSES = 0
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 TARGETS_FILE = SCRIPT_DIR / "targets.json"
@@ -86,7 +86,7 @@ def main() -> int:
         "--retry-passes",
         type=int,
         default=DEFAULT_RETRY_PASSES,
-        help="网络失败后的慢速补抓轮数，默认 2；设为 0 可关闭",
+        help="网络失败后的慢速补抓轮数，默认 0（不自动补抓）；需要时手动指定轮数",
     )
     parser.add_argument(
         "--repair-names",
