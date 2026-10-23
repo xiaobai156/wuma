@@ -3905,7 +3905,7 @@
     {
       "id": "kill5-0211",
       "name": "六合专家",
-      "url": "https://0130190827.673454.xyz/bbs/topic.php?id=20149",
+      "url": "https://0130190827.673454.xyz/bbs/topic.php?id=20238",
       "region": "bottom",
       "count": 5,
       "source": { "kind": "static_topic" },
@@ -4160,6 +4160,7 @@
     {
       "id": "kill5-0236",
       "name": "六合内部",
+      "disabled": true,
       "url": "https://bbs02.341627.cyou/bbs/topic.php?id=18037",
       "region": "bottom",
       "count": 5,
