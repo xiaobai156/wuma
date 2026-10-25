@@ -27,6 +27,21 @@ def issue_boundary_pattern() -> str:
         for boundary in (USER_RECORD_BOUNDARY, DOCUMENT_BOUNDARY)
     )
 
+
+def next_issue_pattern() -> str:
+    """相邻期号标签的截断样式，用于界定本期段落。
+
+    除了规范的「NNN期」，还要认出站方常见的不规范写法，否则本期段落会一路
+    吞到下一期的号码里，造成跨期借值：
+    - 缺「期」字：``299:`` / ``299：``
+    - 四位笔误：``1299期``
+    - 「第NNN期」
+    """
+    return (
+        r"(?<!\d)(?:第\s*)?\d{2,4}\s*期"
+        r"|(?<!\d)\d{3}\s*[:：]"
+    )
+
 def remove_fragment(url: str) -> str:
     parsed = urlparse(url)
     return parsed._replace(fragment="").geturl()
@@ -146,11 +161,41 @@ def find_number_groups(segment: str) -> list[list[str]]:
 
     groups = collect(before_open)
     if not groups:
-        # 有些页面把“开:00准”放在第一行，号码放到下一行。
-        groups = collect(segment.replace("杀", " "))
+        # 有些页面把「开:00准」写在号码之前，号码放在同一行或下一行。
+        # 这时要先跳过开奖结果本身（生肖号或 0000 占位），再看后面有没有本期号码。
+        after_open = re.split(r"[=＝]?\s*开\s*[:：]?", segment.replace("杀", " "), maxsplit=1)
+        tail = after_open[1] if len(after_open) > 1 else ""
+        remainder = _strip_draw_result(tail)
+        if remainder:
+            groups = collect(remainder)
 
     groups.sort(key=len, reverse=True)
     return groups
+
+
+def _strip_draw_result(tail: str) -> str:
+    """剥掉「开」后面的开奖结果，返回剩余内容。
+
+    开奖结果形如 ``龙02准``、``0000准``、``?? 准``；剥掉之后如果还有号码，
+    那才是本期杀码。整段只有开奖结果时返回空串，避免把开奖号当杀码。
+
+    紧跟在「开」后面的纯号码组一律视为开奖号：它和杀码格式无法区分，
+    宁可本期判失败，也不能把开奖号写成本期杀码。
+    """
+    if not tail:
+        return ""
+    stripped = tail.strip()
+    # 紧贴「开」的纯号码组 = 开奖号，整段丢弃。
+    if re.match(r"^\s*[0０]?[0０]?\s*[.．,，、\s]\s*[0０]?\d", stripped) or re.match(
+        r"^\s*\d{1,2}\s*[.．,，、]", stripped
+    ):
+        return ""
+    return re.sub(
+        r"^\s*(?:[鼠牛虎兔龙蛇马羊猴鸡狗猪]?\s*[0０]?[0０]{1,2}|[?？]{1,4})?\s*[准错对中]?",
+        "",
+        tail,
+        count=1,
+    ).strip()
 
 
 def keyword_scoped_number_groups(
@@ -304,7 +349,8 @@ def select_candidate(
 def issue_segment_matches(text: str, issue: str) -> list[re.Match]:
     issue = normalize_issue(issue)
     pattern = re.compile(
-        rf"(?<!\d)0?{re.escape(issue)}\s*期(?P<body>.*?)(?=(?<!\d)\d{{3}}\s*期|{issue_boundary_pattern()}|$)",
+        rf"(?<!\d)0?{re.escape(issue)}\s*期(?P<body>.*?)"
+        rf"(?={next_issue_pattern()}|{issue_boundary_pattern()}|$)",
         re.S,
     )
     return list(pattern.finditer(text))
@@ -316,7 +362,8 @@ def issue_segments(text: str, issue: str) -> list[str]:
 
 def all_issue_segment_matches(text: str) -> list[re.Match]:
     pattern = re.compile(
-        rf"(?<!\d)0?(\d{{3}})\s*期(?P<body>.*?)(?=(?<!\d)\d{{3}}\s*期|{issue_boundary_pattern()}|$)",
+        rf"(?<!\d)0?(\d{{3}})\s*期(?P<body>.*?)"
+        rf"(?={next_issue_pattern()}|{issue_boundary_pattern()}|$)",
         re.S,
     )
     return list(pattern.finditer(text))
