@@ -27,6 +27,35 @@ def issue_boundary_pattern() -> str:
         for boundary in (USER_RECORD_BOUNDARY, DOCUMENT_BOUNDARY)
     )
 
+
+def neighbor_issue_pattern(issue: str, span: int = 2) -> str:
+    """界定本期段落的截断样式。
+
+    必须保留「任何 3 位期号」这条（历史上就是靠它截断的，去掉会让段落一路
+    吞到更早的历史期，反而制造借值）。在此基础上额外认出不规范写法：
+    - 四位笔误：1299期
+    - 缺「期」字：299: / 299：
+    - 「第N期」
+    """
+    base = int(normalize_issue(issue))
+    near = set()
+    for delta in range(-span, span + 1):
+        if delta == 0:
+            continue
+        value = (base + delta) % ISSUE_CYCLE
+        if value == 0:
+            value = ISSUE_CYCLE
+        near.add(value)
+    near_body = "|".join(f"0?{value}" for value in sorted(near))
+    return (
+        # 任何 3 位期号（历史行为，必须保留）
+        r"(?<!\d)(?:第\s*)?\d{3}\s*期"
+        # 四位笔误：1xxx 期
+        r"|(?<!\d)1\d{3}\s*期"
+        # 缺「期」字的冒号写法，只认邻近期，避免把时间 299:59 误判
+        rf"|(?<!\d)(?:{near_body})\s*[:：](?!\d)"
+    )
+
 def remove_fragment(url: str) -> str:
     parsed = urlparse(url)
     return parsed._replace(fragment="").geturl()
@@ -101,8 +130,46 @@ def valid_number(token: str) -> bool:
     return 1 <= number <= 49
 
 
+DRAW_MARKER_RE = re.compile(
+    # 只认真正的开奖标记，避免「已公开」「开奖」这类含「开」的普通词：
+    # 1) 「开」后面紧跟冒号：开: 开：
+    # 2) 「开」后面紧跟开奖内容：开龙02准 / 开 0000准 / 开??准
+    # 3) 「开」+空格+号码：开 13 24 35 46 07（但「已公开 05」不算）
+    r"(?<![公奖始展场盘])[=＝]?\s*开\s*"
+    r"(?:[:：]|(?=(?:[鼠牛虎兔龙蛇马羊猴鸡狗猪]|[0０]{2,4}|[?？]{1,4}))|(?=\s+\d))"
+)
+
+
+def _split_at_draw(segment: str) -> tuple[str, str]:
+    """在第一个真正的开奖标记处切成（开奖前, 开奖后）。"""
+    match = DRAW_MARKER_RE.search(segment)
+    if not match:
+        return segment, ""
+    return segment[:match.start()], segment[match.end():]
+
+
+def _tail_has_kill_numbers(tail: str) -> bool:
+    """判断开奖标记之后是否还有本期杀码。
+
+    开奖结果本身（龙02准 / 0000准 / ?? 准）不算；紧跟其后的号码才算。
+    紧贴冒号的纯号码组（开:13.24.35.46.07）视为开奖号，不算杀码。
+    """
+    if not tail:
+        return False
+    # 开:13.24.35.46.07 / 开 13 24 35 46 07 这类紧贴开奖标记的纯号码组 = 开奖号
+    if re.match(r"^\s*\d{1,2}(?:\s*[.,，、;；/\-]\s*\d{1,2}|\s+\d{1,2}){2,}", tail):
+        return False
+    remainder = re.sub(
+        r"^\s*(?:[鼠牛虎兔龙蛇马羊猴鸡狗猪]?\s*[0０]{1,2}|[?？]{1,4})?\s*[准错对中]?",
+        "",
+        tail,
+        count=1,
+    )
+    return bool(re.search(r"\d{2}", remainder))
+
+
 def find_number_groups(segment: str) -> list[list[str]]:
-    before_open = re.split(r"[=＝]?\s*开\s*[:：]?", segment, maxsplit=1)[0]
+    before_open, after_open = _split_at_draw(segment)
     before_open = before_open.replace("杀", " ")
 
     def collect(source: str) -> list[list[str]]:
@@ -146,8 +213,10 @@ def find_number_groups(segment: str) -> list[list[str]]:
 
     groups = collect(before_open)
     if not groups:
-        # 有些页面把“开:00准”放在第一行，号码放到下一行。
-        groups = collect(segment.replace("杀", " "))
+        # 有些页面把「开:00准」写在号码之前，号码放到同一行或下一行。
+        # 只在开奖标记之后确实还有号码时才取，避免把开奖号当本期杀码。
+        if _tail_has_kill_numbers(after_open):
+            groups = collect(after_open.replace("杀", " "))
 
     groups.sort(key=len, reverse=True)
     return groups
@@ -304,7 +373,8 @@ def select_candidate(
 def issue_segment_matches(text: str, issue: str) -> list[re.Match]:
     issue = normalize_issue(issue)
     pattern = re.compile(
-        rf"(?<!\d)0?{re.escape(issue)}\s*期(?P<body>.*?)(?=(?<!\d)\d{{3}}\s*期|{issue_boundary_pattern()}|$)",
+        rf"(?<!\d)0?{re.escape(issue)}\s*期(?P<body>.*?)"
+        rf"(?={neighbor_issue_pattern(issue)}|{issue_boundary_pattern()}|$)",
         re.S,
     )
     return list(pattern.finditer(text))
@@ -316,7 +386,9 @@ def issue_segments(text: str, issue: str) -> list[str]:
 
 def all_issue_segment_matches(text: str) -> list[re.Match]:
     pattern = re.compile(
-        rf"(?<!\d)0?(\d{{3}})\s*期(?P<body>.*?)(?=(?<!\d)\d{{3}}\s*期|{issue_boundary_pattern()}|$)",
+        rf"(?<!\d)0?(\d{{3}})\s*期(?P<body>.*?)"
+        rf"(?=(?<!\d)(?:第\s*)?\d{{2,4}}\s*期|(?<!\d)\d{{3}}\s*[:：](?!\d)"
+        rf"|{issue_boundary_pattern()}|$)",
         re.S,
     )
     return list(pattern.finditer(text))
