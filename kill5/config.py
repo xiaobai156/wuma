@@ -208,6 +208,8 @@ def load_targets(
             raise ValueError(f"targets.json 第 {index} 条缺少 name")
         merged = item.get("merged")
         is_merged = source_kind == "merged_sources"
+        # 先取本条自己的 count，避免用到上一轮循环的残留值
+        count = item.get("count")
         if is_merged:
             if not isinstance(merged, list) or len(merged) < 2:
                 raise ValueError(
@@ -253,9 +255,10 @@ def load_targets(
                 raise ValueError(
                     f"targets.json 第 {index} 条 {name} 只有 merged_sources 才能配置 merged"
                 )
-            parsed_url = urlparse(url)
-            if not url or parsed_url.scheme not in {"http", "https"} or not parsed_url.netloc:
-                raise ValueError(f"targets.json 第 {index} 条缺少有效 http(s) url")
+        # 顶层 url 无论哪种来源都必须是合法 http(s)：失败行与缓存身份都要用它
+        parsed_url = urlparse(url)
+        if not url or parsed_url.scheme not in {"http", "https"} or not parsed_url.netloc:
+            raise ValueError(f"targets.json 第 {index} 条缺少有效 http(s) url")
         if not isinstance(keywords, list) or not keywords or not all(
             str(keyword).strip() for keyword in keywords
         ):
@@ -263,6 +266,18 @@ def load_targets(
         if region not in CONFIG_REGIONS:
             raise ValueError(
                 f"targets.json 第 {index} 条 {name} 缺少有效 top/bottom region"
+            )
+        if is_merged and str(region).strip().lower() not in {
+            "top",
+            "upper",
+            "head",
+            "first",
+            "上",
+            "顶部",
+        }:
+            raise ValueError(
+                f"targets.json 第 {index} 条 {name} 的 merged_sources 只支持 top 方向"
+                "（各段按栏目关键词直接取本期行，没有方向窗口语义）"
             )
         issue_position_window = item.get("issue_position_window")
         if issue_position_window is not None and issue_position_window != ISSUE_POSITION_WINDOW:

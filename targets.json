@@ -4361,8 +4361,8 @@
       "source": { "kind": "merged_sources" },
       "parse": { "keywords": ["绝杀三码"], "anchor": "作者:朱唇玉面" },
       "merged": [
-        { "url": "https://xclswmh.5nsui-oluq4-qsrxws.work:17455/topic/250930.html", "keywords": ["绝杀三码"], "count": 3, "name": "朱唇玉面", "decoded_anchor_only": "作者:朱唇玉面", "decoded_anchor_chunks": 1 },
-        { "url": "https://rjjqrtfz.9kn5c-1jxv0-lkuxob.work/topic/764779.html", "keywords": ["绝杀②码"], "count": 2, "name": "老鼠报", "decoded_anchor_only": "绝杀②码", "decoded_anchor_chunks": 1 }
+        { "url": "https://xclswmh.5nsui-oluq4-qsrxws.work:17455/topic/250930.html", "keywords": ["绝杀三码"], "count": 3, "name": "朱唇玉面" },
+        { "url": "https://rjjqrtfz.9kn5c-1jxv0-lkuxob.work/topic/764779.html", "keywords": ["绝杀②码"], "count": 2, "name": "老鼠报" }
       ]
     }
 

@@ -109,6 +109,19 @@ def target_cache_identity(target: dict, *, project_name: str) -> dict[str, objec
         "parse": {key: target.get(key) for key in parse_fields if key in target},
         "network": {key: target.get(key) for key in network_fields if key in target},
     }
+    # merged_sources 站点的真实来源写在 merged 里，必须纳入身份指纹，
+    # 否则换源后缓存仍被当成同一来源。
+    merged = target.get("merged")
+    if merged:
+        config["merged"] = [
+            {
+                "url": canonical_url(str(part.get("url") or "")),
+                "keywords": part.get("keywords"),
+                "count": part.get("count"),
+            }
+            for part in merged
+            if isinstance(part, dict)
+        ]
     fingerprint = hashlib.sha256(
         json.dumps(config, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode(
             "utf-8"

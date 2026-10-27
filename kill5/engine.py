@@ -51,7 +51,7 @@ def _crawl_merged(
             exc.code,
             stage=exc.stage,
             retryable=exc.retryable,
-            evidence=exc.evidence,
+            evidence={"issues": list(issues), **(exc.evidence or {})},
         )
     except Exception as exc:  # noqa: BLE001
         return [], failure_from_exception(target, name, exc, issues=issues)
