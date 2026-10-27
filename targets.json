@@ -4364,6 +4364,15 @@
         { "url": "https://xclswmh.5nsui-oluq4-qsrxws.work:17455/topic/250930.html", "keywords": ["绝杀三码"], "count": 3, "name": "朱唇玉面" },
         { "url": "https://rjjqrtfz.9kn5c-1jxv0-lkuxob.work/topic/764779.html", "keywords": ["绝杀②码"], "count": 2, "name": "老鼠报" }
       ]
+    },
+    {
+      "id": "kill5-0250",
+      "name": "古色古香",
+      "url": "https://ghegvfr.5n8r1-kurkd-esielp.cyou:17455/",
+      "region": "top",
+      "count": 5,
+      "source": { "kind": "decoded_script" },
+      "parse": { "keywords": ["绝杀⑤码", "绝杀5码"], "anchor": "古色古香", "decoded_anchor_only": "古色古香", "decoded_anchor_chunks": 5, "first_issue_chain": true, "issue_position_window": 3 }
     }
 
   ]
