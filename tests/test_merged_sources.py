@@ -1,11 +1,20 @@
 """merged_sources 合并来源站点的回归测试（不联网）。
 
-覆盖审查指出的缺陷：失败证据带 issues、配置校验不读残留 count、
-日期不误取、无冒号开奖号不误取、缺期字/四位笔误不借值、
-段内别栏目不误取、同期多值冲突、跨来源重复、数量不足。
+覆盖两轮审查指出的缺陷：
+- 失败证据必须带 issues（否则整批输出被阻断）
+- 配置校验不能读残留 count（前一条 count=3/6 的场景）
+- 期号切段：缺「期」字、四位笔误不能借值
+- 开奖号：带冒号、不带冒号都不能当杀码
+- 日期时间不能当号码；横线号码不能被日期规则误剔
+- 别栏目号码不能被取走（含 2 码来源）
+- 号码在关键词之前不能取
+- 本圈缺值不能跳到上一圈借值
+- 同期多值必须判冲突
+- 缓存身份指纹必须含 merged
 """
 from __future__ import annotations
 
+import base64
 import json
 import tempfile
 import unittest
@@ -65,9 +74,10 @@ class MergedSourcesTests(unittest.TestCase):
         self.assertEqual(results[1].numbers, ['01', '23', '24', '45', '34'])
 
     def test_three_plus_one_fails(self):
+        """3+1 不足 5 码必须失败，不能凑数。"""
         with self.assertRaises(CrawlError) as ctx:
             self.run_with(content_b='300期【绝杀②码】13 开0000准\n')
-        self.assertIn('2 个合法号码', str(ctx.exception))
+        self.assertIn('绝杀②码', str(ctx.exception))
 
     def test_missing_issue_fails(self):
         with self.assertRaises(CrawlError) as ctx:
@@ -89,52 +99,98 @@ class MergedSourcesTests(unittest.TestCase):
             crawl_merged_target(bad, ['300'])
         self.assertIn('不一致', str(ctx.exception))
 
+    # --- 开奖号 ---
+
     def test_draw_number_with_colon_not_taken(self):
         with self.assertRaises(CrawlError):
             self.run_with(content_a='300期:绝杀三码 开:龙02准\n')
 
     def test_draw_number_without_colon_not_taken(self):
-        """缺陷 4：无冒号开奖号（开 13 24 / 开龙02）不能被当杀码。"""
         with self.assertRaises(CrawlError):
             self.run_with(content_a='300期:绝杀三码 开 05 12 24\n')
 
+    # --- 日期/时间 ---
+
     def test_date_not_taken_as_numbers(self):
-        """缺陷 5：日期/时间不能被当成号码。"""
         with self.assertRaises(CrawlError):
             self.run_with(
                 content_b='300期【绝杀②码】 更新时间 2026-10-27 已更新 开0000准\n'
             )
 
+    def test_date_glued_to_chinese_still_stripped(self):
+        """日期紧贴中文（无空格）也要剔除，\\b 在中文旁不成立是旧缺陷。"""
+        with self.assertRaises(CrawlError):
+            self.run_with(content_b='300期【绝杀②码】更新10-27开0000准\n')
+
+    def test_time_glued_to_chinese_still_stripped(self):
+        with self.assertRaises(CrawlError):
+            self.run_with(content_a='300期:绝杀三码时间19:41开00准\n')
+
     def test_date_ignored_real_numbers_still_taken(self):
-        """带日期时仍要取到真实号码。"""
         results = self.run_with(
             content_b='300期【绝杀②码】 更新 2026-10-27 13.11 开0000准\n'
         )
         self.assertEqual(results[0].numbers[-2:], ['13', '11'])
 
+    def test_dash_separated_numbers_not_stripped_as_date(self):
+        """横线分隔的号码组不能被日期规则误剔（12-13 不是月-日）。"""
+        results = self.run_with(content_b='300期【绝杀②码】12-13 开0000准\n')
+        self.assertEqual(results[0].numbers[-2:], ['12', '13'])
+
+    # --- 期号边界 ---
+
     def test_missing_qi_char_does_not_borrow(self):
-        """缺陷 3：299: 这种缺「期」字写法要能截断，不能借下一期。"""
         with self.assertRaises(CrawlError):
-            self.run_with(
-                content_a='300期:绝杀三码\n299:绝杀三码【01.23.24】\n'
-            )
+            self.run_with(content_a='300期:绝杀三码\n299:绝杀三码【01.23.24】\n')
 
     def test_four_digit_issue_does_not_borrow(self):
-        """缺陷 3：1300期 四位笔误要能截断。"""
         with self.assertRaises(CrawlError):
-            self.run_with(
-                content_a='300期:绝杀三码\n1300期:绝杀三码【05.06.07】\n'
-            )
+            self.run_with(content_a='300期:绝杀三码\n1300期:绝杀三码【05.06.07】\n')
 
-    def test_other_column_in_same_segment_not_taken(self):
-        """缺陷 6：段内别栏目（杀三肖）的号码不能被取走。"""
+    # --- 栏目归属 ---
+
+    def test_other_column_before_keyword_not_taken(self):
+        """别栏目号码在关键词之前，不能被取走（3 码来源）。"""
         results = self.run_with(
-            content_a='300期:绝杀三肖 41.42.43 绝杀三码【01.35.32】开00准\n'
+            content_a='300期:杀三肖 41.42.43 绝杀三码【01.35.32】开00准\n'
         )
         self.assertEqual(results[0].numbers[:3], ['01', '35', '32'])
 
+    def test_other_column_in_short_source_not_taken(self):
+        """别栏目号码在关键词之前，不能被取走（2 码来源，旧版漏修的路径）。"""
+        results = self.run_with(
+            content_b='300期:杀三肖 41.42 绝杀②码 13.11 开0000准\n'
+        )
+        self.assertEqual(results[0].numbers[-2:], ['13', '11'])
+
+    def test_numbers_before_keyword_not_taken(self):
+        """号码写在关键词之前时不认，不能取到后面的别栏目号码。"""
+        with self.assertRaises(CrawlError):
+            self.run_with(
+                content_a='300期: 01.35.32 绝杀三码 杀三肖 41.42.43 开00准\n'
+            )
+
+    def test_keyword_variant_matched_by_normalization(self):
+        """关键词写法差异（②/2）要能命中。"""
+        results = self.run_with(content_b='300期【绝杀2码】13.11 开0000准\n')
+        self.assertEqual(results[0].numbers[-2:], ['13', '11'])
+
+    # --- 借值与冲突 ---
+
+    def test_previous_cycle_not_borrowed_when_this_cycle_incomplete(self):
+        """本圈只出 1 码时不能跳到上一圈借值。"""
+        with self.assertRaises(CrawlError):
+            self.run_with(
+                content_b=(
+                    '300期【绝杀②码】已更新\n'
+                    '300期【绝杀②码】13 开0000准\n'
+                    '299期【绝杀②码】45.34 开猴23准\n'
+                    '300期【绝杀②码】11.23 开虎40准\n'
+                )
+            )
+
     def test_conflicting_values_in_one_segment_fails(self):
-        """同一段内出现两个不同结果必须判冲突（不许静默取第一个）。"""
+        """同一段内出现两个不同结果必须判冲突。"""
         with self.assertRaises(CrawlError) as ctx:
             self.run_with(
                 content_a=(
@@ -145,7 +201,7 @@ class MergedSourcesTests(unittest.TestCase):
         self.assertIn('多个不同结果', str(ctx.exception))
 
     def test_later_wrapped_period_does_not_override(self):
-        """页面上一圈的同期记录（期号循环）不能覆盖本圈的最新值。"""
+        """上一圈同期记录不能覆盖本圈值。"""
         results = self.run_with(
             content_a=(
                 '300期:绝杀三码【01.35.32】开00准\n'
@@ -157,7 +213,7 @@ class MergedSourcesTests(unittest.TestCase):
 
 
 class MergedConfigTests(unittest.TestCase):
-    """缺陷 2/8：配置校验不能读残留 count，merged 顶层 url 必须合法。"""
+    """配置校验：count 不能读残留值，merged 顶层 url 必须合法，只允许 top。"""
 
     def _load(self, targets):
         from kill5.config import load_targets
@@ -185,25 +241,37 @@ class MergedConfigTests(unittest.TestCase):
         entry.update(over)
         return entry
 
+    def _other_entry(self, name, count):
+        return {
+            'id': f'kill5-91{count:02d}',
+            'name': name,
+            'url': f'https://c{count}.example/topic/3.html',
+            'region': 'top',
+            'count': count,
+            'source': {'kind': 'static_topic'},
+            'parse': {'keywords': ['绝杀五码'], 'anchor': name},
+        }
+
     def test_merged_as_first_target_loads(self):
-        """缺陷 2：merged 站排第一条不能抛 UnboundLocalError。"""
         loaded = self._load([self._merged_entry()])
         self.assertEqual(len(loaded), 1)
         self.assertEqual(len(loaded[0]['merged']), 2)
 
-    def test_merged_after_six_count_target_still_loads(self):
-        """缺陷 2：前一条 count=6 时不能拿它去比对 merged 的 3+2。"""
-        other = {
-            'id': 'kill5-9002',
-            'name': '占位站',
-            'url': 'https://c.example/topic/3.html',
-            'region': 'top',
-            'count': 5,
-            'source': {'kind': 'static_topic'},
-            'parse': {'keywords': ['绝杀五码'], 'anchor': '占位'},
-        }
-        loaded = self._load([other, self._merged_entry()])
+    def test_merged_after_normal_target_loads(self):
+        """前面有普通 5 码站时正常加载。"""
+        loaded = self._load([self._other_entry('普通站', 5), self._merged_entry()])
         self.assertEqual(len(loaded), 2)
+
+    def test_merged_count_uses_own_value(self):
+        """merged 校验必须用本条自己的 count（5），不能取上一条的残留值。"""
+        loaded = self._load([self._merged_entry()])
+        self.assertEqual(loaded[0]['count'], 5)
+
+    def test_merged_rejects_own_count_mismatch(self):
+        """本条 count 与各段之和不符时必须拒绝（说明读的是本条的值）。"""
+        with self.assertRaises(ValueError) as ctx:
+            self._load([self._merged_entry(count=6)])
+        self.assertIn('不一致', str(ctx.exception))
 
     def test_merged_requires_two_sources(self):
         with self.assertRaises(ValueError) as ctx:
@@ -213,16 +281,45 @@ class MergedConfigTests(unittest.TestCase):
         self.assertIn('至少需要两个来源', str(ctx.exception))
 
     def test_merged_rejects_empty_url(self):
-        """缺陷 8：merged 顶层 url 为空必须拒绝。"""
         with self.assertRaises(ValueError) as ctx:
             self._load([self._merged_entry(url='')])
         self.assertIn('缺少有效 http(s) url', str(ctx.exception))
 
     def test_merged_rejects_bottom_region(self):
-        """建议 10：merged 只支持 top。"""
         with self.assertRaises(ValueError) as ctx:
             self._load([self._merged_entry(region='bottom')])
         self.assertIn('只支持 top', str(ctx.exception))
+
+
+class MergedIdentityTests(unittest.TestCase):
+    """缺陷 7：缓存身份指纹必须包含 merged 来源。"""
+
+    def _fingerprint(self, merged):
+        from kill5.identity import target_cache_identity
+        target = dict(TARGET)
+        target['merged'] = merged
+        return target_cache_identity(target, project_name='杀五码_解耦版')
+
+    def test_identity_changes_when_sources_change(self):
+        first = self._fingerprint([
+            {'url': 'https://a.example/1', 'keywords': ['绝杀三码'], 'count': 3},
+            {'url': 'https://b.example/2', 'keywords': ['绝杀②码'], 'count': 2},
+        ])
+        second = self._fingerprint([
+            {'url': 'https://x.example/9', 'keywords': ['绝杀三码'], 'count': 3},
+            {'url': 'https://y.example/8', 'keywords': ['绝杀②码'], 'count': 2},
+        ])
+        self.assertNotEqual(first['config_fingerprint'], second['config_fingerprint'])
+
+    def test_identity_stable_for_same_sources(self):
+        merged = [
+            {'url': 'https://a.example/1', 'keywords': ['绝杀三码'], 'count': 3},
+            {'url': 'https://b.example/2', 'keywords': ['绝杀②码'], 'count': 2},
+        ]
+        self.assertEqual(
+            self._fingerprint(merged)['config_fingerprint'],
+            self._fingerprint(merged)['config_fingerprint'],
+        )
 
 
 class MergedFailureEvidenceTests(unittest.TestCase):
@@ -242,6 +339,36 @@ class MergedFailureEvidenceTests(unittest.TestCase):
         self.assertIsNotNone(failure)
         self.assertIn('issues', failure.evidence)
         self.assertEqual(list(failure.evidence['issues']), ['300'])
+
+
+class MergedFetchTests(unittest.TestCase):
+    """merged_sources 的抓取与解码（不联网，喂假页面）。"""
+
+    def test_decodes_inline_and_external_script(self):
+        from kill5.adapters import merged_sources as ms
+
+        inline = base64.b64encode('300期【绝杀②码】13.11'.encode()).decode()
+        external = base64.b64encode('299期【绝杀②码】45.34'.encode()).decode()
+        page = f'<script>document.writeln(strdecode("{inline}"))</script>'
+        page += '<script src="//cdn.example/x.js?v=2"></script>'
+
+        def fake_fetch(url, encoding=None, **kwargs):
+            if 'cdn.example' in url:
+                return f'<script>document.writeln(strdecode("{external}"))</script>'
+            return page
+
+        with patch.object(ms, 'fetch_text', side_effect=fake_fetch):
+            _, content = ms.crawl_merged_source({'url': 'https://a.example/1'})
+        self.assertIn('13.11', content)
+        self.assertIn('45.34', content)
+
+    def test_empty_decode_raises_instead_of_falling_back(self):
+        """解码为空必须报错，不能退回整页原文（fail-open）。"""
+        from kill5.adapters import merged_sources as ms
+        with patch.object(ms, 'fetch_text', return_value='<html>导航壳</html>'):
+            with self.assertRaises(ValueError) as ctx:
+                ms.crawl_merged_source({'url': 'https://a.example/1'})
+        self.assertIn('解码为空', str(ctx.exception))
 
 
 if __name__ == '__main__':

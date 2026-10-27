@@ -41,8 +41,9 @@ def _absolute(src: str, page_url: str) -> str:
 def crawl_merged_source(spec: dict) -> tuple[str, str]:
     """抓取单个来源，返回（站名, 正文）。
 
-    正文优先只用解码块；解码块为空时才退回整页原文，避免导航栏里的
-    期号与号码干扰取数。
+    正文**只取解码块**。这类站点的期号与号码都在 strdecode 负载里，页面本身
+    是导航壳；退回整页原文会把导航栏内容当正文解析（fail-open），按项目规则
+    应当失败而不是猜测，所以解码为空时直接报错。
     """
     url = str(spec.get("url") or "").strip()
     if not url:
@@ -52,17 +53,22 @@ def crawl_merged_source(spec: dict) -> tuple[str, str]:
 
     page = fetch_text(url, encoding=encoding)
     decoded: list[str] = decode_strdecode_payloads(page)
+
+    failed_scripts = 0
     for src in _SCRIPT_SRC_RE.findall(page):
         try:
             script = fetch_text(_absolute(src, url), encoding=encoding)
         except Exception:  # noqa: BLE001
-            # 单个脚本抓取失败不静默：记录下来，交由上层判定正文是否完整
+            failed_scripts += 1
             continue
         decoded.extend(decode_strdecode_payloads(script))
 
-    if decoded:
-        return name, "\n".join(decoded)
-    return name, page
+    if not decoded:
+        raise ValueError(
+            f"merged 来源解码为空（页面 {len(page)} 字节，"
+            f"脚本抓取失败 {failed_scripts} 个）：{url}"
+        )
+    return name, "\n".join(decoded)
 
 
 __all__ = ["MERGED_KIND", "crawl_merged_source", "_source_specs"]

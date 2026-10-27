@@ -5,10 +5,13 @@
 
 取数规则一律复用主链路已加固过的实现，不另写一套正则：
 - 段边界用 ``neighbor_issue_pattern``（认 3 位期号、四位笔误、缺「期」字冒号写法）
-- 开奖号识别用 ``DRAW_MARKER_RE`` + ``_tail_has_kill_numbers``（认 开: / 开龙02 / 开 13 24）
-- 栏目归属用 ``keyword_scoped_number_groups``（号码必须落在关键词所在行）
+- 开奖号识别用 ``DRAW_MARKER_RE``（认 开: / 开龙02 / 开 13 24）
+- 栏目归属用 ``keyword_scoped_number_groups`` + 归一化关键词比较
 
-fail-closed：任一段数量不符、号码非法、跨来源重复、同期多值冲突，一律判失败。
+fail-closed 原则：
+- 任一段数量不符、号码非法、跨来源重复、同期多值冲突，一律判失败；
+- 本圈段落里一旦出现号码，就必须给出唯一合法组，取不到即失败，绝不跳到
+  后续段落（那是上一圈的历史记录，会跨期借值）。
 """
 from __future__ import annotations
 
@@ -22,29 +25,40 @@ from ..parser import (
     keyword_scoped_number_groups,
     neighbor_issue_pattern,
     normalize_issue,
+    normalize_keyword,
     valid_number,
 )
 from .merged_sources import _source_specs, crawl_merged_source
 
 MERGED_KIND = "merged_sources"
 
-# 日期/时间形态：2026-10-27、10-27、19:41、2026/10/27
+# 日期/时间形态：2026-10-27、2026/10/27、2026年10月27日、10-27、19:41。
+# 用 (?<!\d)/(?!\d) 而不是 \b——\b 在中文旁不成立，「更新10-27」会漏剔。
+# 裸「月-日」只在**前面紧贴中文或行首/空白、且后面不是号码分隔符**时才算日期，
+# 这样 12-13（横线两码）、11-13-15（横线三码）不会被误剔。
 _DATE_LIKE_RE = re.compile(
-    r"\d{4}\s*[-/.年]\s*\d{1,2}\s*[-/.月]\s*\d{1,2}"
-    r"|\b\d{1,2}\s*[-/]\s*\d{1,2}\b"
-    r"|\b\d{1,2}\s*[:：]\s*\d{2}\b"
+    r"(?<!\d)\d{4}\s*[-/.年]\s*\d{1,2}\s*[-/.月]\s*\d{1,2}\s*日?"
+    r"|(?:(?<=[\u4e00-\u9fff])|(?<=^)|(?<=\s))"
+    r"(?:0?[1-9]|1[0-2])\s*[-/]\s*(?:0?[1-9]|[12]\d|3[01])"
+    r"(?!\s*[-/]\s*\d)(?!\d)"
+    r"|(?<!\d)(?:[01]?\d|2[0-3])\s*[:：]\s*[0-5]\d(?!\d)"
 )
 
 
 def _strip_date_like(segment: str) -> str:
-    """把日期/时间形态整段剔除，避免 10-27、19:41 被当成号码。"""
+    """剔除日期/时间形态，避免 10-27、19:41 被当成号码。
+
+    只剔「四位数年份 / 合法月-日 / 时:分」；横线连写的号码组保留，
+    交给后续号码解析。
+    """
     return _DATE_LIKE_RE.sub(" ", segment)
 
 
 def _issue_segments(content: str, issue: str) -> list[str]:
     """取本期所有段落：本期期号 → 下一个期号标签。边界复用主链路规则。
 
-    页面上同一期常出现多次（标题行 + 正文行），全部返回，由上层逐个尝试。
+    页面上同一期常出现多次（标题行 + 正文行 + 上一圈历史记录），全部返回，
+    由上层按顺序判断。
     """
     normalized = normalize_issue(issue)
     pattern = re.compile(
@@ -62,43 +76,122 @@ def _issue_segments(content: str, issue: str) -> list[str]:
     return segments
 
 
-def _groups_for_issue(segment: str, keywords: list[str], expected: int) -> list[list[str]]:
+def _normalized_positions(line: str, keywords: list[str]) -> list[int]:
+    """关键词在归一化文本里的位置。兼容 绝杀2码/绝杀②码/绝杀二码 写法差异。"""
+    normalized_line = normalize_keyword(line)
+    positions = []
+    for keyword in keywords:
+        normalized_keyword = normalize_keyword(keyword)
+        if not normalized_keyword:
+            continue
+        index = normalized_line.find(normalized_keyword)
+        if index >= 0:
+            positions.append(index)
+    return positions
+
+
+def _line_has_keyword(line: str, keywords: list[str]) -> bool:
+    return bool(_normalized_positions(line, keywords))
+
+
+def _tail_after_keyword(line: str, keywords: list[str]) -> str:
+    """切出「最后一个本栏目关键词之后」的文本，并截掉开奖标记及其后内容。"""
+    positions = _normalized_positions(line, keywords)
+    if not positions:
+        return ""
+    tail = line[max(positions):]
+    return DRAW_MARKER_RE.split(tail, maxsplit=1)[0]
+
+
+# 别栏目标记：出现这些字样说明前缀里的号码属于另一栏，不是本栏目的号码。
+_OTHER_COLUMN_RE = re.compile(
+    r"杀\s*[0-9一二三四五六七八九十]+\s*[肖码头尾波]"
+    r"|绝杀\s*[0-9一二三四五六七八九十]*\s*[肖码头尾波]"
+    r"|中特|平特|波色|生肖|杀料|资料"
+)
+
+
+def _prefix_has_other_column(prefix: str) -> bool:
+    """前缀里是否有别的栏目标记。有则前缀号码归属别栏目，可忽略。"""
+    return bool(_OTHER_COLUMN_RE.search(normalize_keyword(prefix)))
+
+
+def _numbers_after_keyword(line: str, keywords: list[str]) -> list[list[str]]:
+    """只取「关键词之后」的号码组，避免把别栏目、期号前的号码算进来。
+
+    关键词之前若出现号码：只有当这些号码前面另有别栏目标记时才忽略（它们属于
+    别栏目）；否则说明本行号码写在本栏目关键词之前，顺序异常，整行不认。
+    """
+    positions = _normalized_positions(line, keywords)
+    if not positions:
+        return []
+    start = max(positions)
+    prefix = line[:start]
+    has_prefix_numbers = bool(
+        find_number_groups(prefix) or re.search(r"(?<!\d)\d{1,2}[.．,，、]", prefix)
+    )
+    if has_prefix_numbers and not _prefix_has_other_column(prefix):
+        return []
+    tail = _tail_after_keyword(line, keywords)
+    if not tail:
+        return []
+    return find_number_groups(tail)
+
+
+def _short_groups_after_keyword(line: str, keywords: list[str]) -> list[list[str]]:
+    """2 码这类短组：只取关键词之后的、点/逗号/空格/横线分隔的号码。"""
+    positions = _normalized_positions(line, keywords)
+    if not positions:
+        return []
+    start = max(positions)
+    prefix = line[:start]
+    has_prefix_numbers = bool(re.search(r"(?<!\d)\d{1,2}[.．,，、]", prefix))
+    if has_prefix_numbers and not _prefix_has_other_column(prefix):
+        return []
+    tail = _tail_after_keyword(line, keywords)
+    if not tail:
+        return []
+    groups: list[list[str]] = []
+    for match in re.finditer(r"(?<!\d)(\d{1,2})(?:[.．,，、\s\-]+(\d{1,2}))+", tail):
+        tokens = re.findall(r"\d{1,2}", match.group(0))
+        if len(tokens) >= 2:
+            groups.append(tokens)
+    return groups
+
+
+def _groups_for_issue(
+    segment: str,
+    keywords: list[str],
+    expected: int,
+) -> list[list[str]]:
     """取本期段内属于该栏目的候选号码组。
 
-    优先用主链路的 ``keyword_scoped_number_groups``（号码必须落在关键词所在行）；
-    该函数要求至少 3 码，2 码来源会取不到，此时才用短组正则兜底。
-    兜底同样只在开奖标记之前取，并先剔除日期时间形态。
+    只认「本栏目关键词之后」的号码：期号前的号码、别栏目的号码都不算。
+    主链路 ``keyword_scoped_number_groups`` 只判断关键词在同一行，不判断
+    号码在关键词之前还是之后，所以这里不直接用它，而是按行切出关键词之后
+    的文本再取数。
     """
     cleaned = _strip_date_like(segment)
-    groups = keyword_scoped_number_groups(cleaned, keywords)
+    groups: list[list[str]] = []
 
-    # 同一段里若本期行还带了第二个同栏目号码组，也要收进来判冲突。
-    # 但别栏目的号码（没有紧跟本栏目关键词）必须排除。
-    before_draw = DRAW_MARKER_RE.split(cleaned, maxsplit=1)[0]
-    keyword_list = [str(k) for k in keywords if str(k).strip()]
-    for match in re.finditer(r"[^\n]+", before_draw):
-        line = match.group(0)
-        if not any(k in line for k in keyword_list):
+    for line in re.split(r"[\r\n]+", cleaned):
+        if not line.strip() or not _line_has_keyword(line, keywords):
             continue
-        # 关键词必须出现在号码之前，才算本栏目的号码
-        first_kw = min(line.find(k) for k in keyword_list if k in line)
-        tail = line[first_kw:]
-        for group in find_number_groups(tail):
+        for group in _numbers_after_keyword(line, keywords):
             if group not in groups:
                 groups.append(group)
 
     if groups:
         return groups
 
-    # 2 码这类短组：只取关键词同一行内的号码
+    # 2 码这类短组兜底：同样只认关键词之后的号码
     short: list[list[str]] = []
-    for line in before_draw.splitlines() or [before_draw]:
-        if not any(str(k) in line for k in keywords):
+    for line in re.split(r"[\r\n]+", cleaned):
+        if not line.strip() or not _line_has_keyword(line, keywords):
             continue
-        for match in re.finditer(r"(?<!\d)(\d{1,2})(?:[.．,，、\s\-/]+(\d{1,2}))+", line):
-            tokens = re.findall(r"\d{1,2}", match.group(0))
-            if len(tokens) >= 2:
-                short.append(tokens)
+        for group in _short_groups_after_keyword(line, keywords):
+            if group not in short:
+                short.append(group)
     return short
 
 
@@ -108,7 +201,7 @@ def _pick_group(
     issue: str,
     source_label: str,
 ) -> list[str]:
-    """从候选组里挑出数量正好等于 expected 的合法组；多个不同值即判冲突。"""
+    """挑出数量正好等于 expected 的合法组；多个不同值即判冲突。"""
     picked: list[list[str]] = []
     for group in groups:
         if len(group) != expected:
@@ -148,22 +241,24 @@ def _numbers_from_source(
 ) -> list[str]:
     """在单个来源里取本期号码。
 
-    页面上同一期可能出现多次（标题行、正文行、以及上一圈的历史记录）。
-    按出现顺序逐个段落尝试，取第一个能给出合法组的段落即停；
-    同一段落内出现多个不同结果仍判冲突（说明该段落本身有歧义）。
+    逐段落扫描，规则：
+    - 段落里**完全没有号码**（标题行之类）→ 跳过，无借值风险；
+    - 段落里**有号码** → 必须给出唯一合法组，否则直接失败。
+      绝不跳到后续段落，因为那可能是上一圈的历史记录（跨期借值）。
     """
     segments = _issue_segments(content, issue)
     for segment in segments:
+        if not _segment_has_any_number(segment):
+            continue
         groups = _groups_for_issue(segment, keywords, expected)
         if not groups:
-            continue
-        try:
-            return _pick_group(groups, expected, issue, source_label)
-        except CrawlError as exc:
-            # 本段无合法组（数量不符）时继续看下一段；冲突则直接上抛
-            if exc.code == ErrorCode.CANDIDATE_CONFLICT:
-                raise
-            continue
+            raise CrawlError(
+                ErrorCode.POSITION_MISMATCH,
+                f"{normalize_issue(issue)} 期在来源「{source_label}」的段落里"
+                f"找不到本栏目（{'/'.join(keywords)}）的号码",
+                stage="merged_numbers",
+            )
+        return _pick_group(groups, expected, issue, source_label)
 
     raise CrawlError(
         ErrorCode.POSITION_MISMATCH,
@@ -171,6 +266,21 @@ def _numbers_from_source(
         f"{expected} 个合法号码",
         stage="merged_numbers",
     )
+
+
+def _segment_has_any_number(segment: str) -> bool:
+    """段落里是否出现过任何号码形态（含单独 1 码、2 码这类短组）。
+
+    判定范围只到开奖标记之前，避免开奖号让「无号码的标题段」被误判为有号码。
+    """
+    cleaned = _strip_date_like(segment)
+    cleaned = DRAW_MARKER_RE.split(cleaned, maxsplit=1)[0]
+    if find_number_groups(cleaned):
+        return True
+    # 去掉期号本身（如 300期 的 300），剩下的数字才算号码
+    without_issue = re.sub(r"(?<!\d)0?\d{2,4}\s*期", " ", cleaned)
+    without_issue = re.sub(r"<[^>]+>", " ", without_issue)
+    return bool(re.search(r"(?<!\d)\d{1,2}(?!\d)", without_issue))
 
 
 def crawl_merged_target(target: dict, issues: list[str]) -> list[CrawlResult]:
@@ -185,8 +295,8 @@ def crawl_merged_target(target: dict, issues: list[str]) -> list[CrawlResult]:
             stage="merged_config",
         )
 
-    # 每期只抓一次每个来源，避免多期重复请求
-    fetched: list[tuple[dict, str]] = []
+    # 先校验全部配置，再统一抓取，避免配置有误时白抓
+    prepared: list[tuple[dict, list[str], int, str]] = []
     for spec in specs:
         part_count = int(spec.get("count") or 0)
         keywords = [str(k) for k in (spec.get("keywords") or []) if str(k).strip()]
@@ -202,17 +312,20 @@ def crawl_merged_target(target: dict, issues: list[str]) -> list[CrawlResult]:
                 "merged 来源缺少有效 count",
                 stage="merged_config",
             )
+        label = str(spec.get("name") or spec.get("url") or "").strip() or "来源"
+        prepared.append((spec, keywords, part_count, label))
+
+    # 每个来源只抓一次，多期共用
+    fetched: list[tuple[list[str], int, str, str]] = []
+    for spec, keywords, part_count, label in prepared:
         _, content = crawl_merged_source(spec)
-        fetched.append((spec, content))
+        fetched.append((keywords, part_count, label, content))
 
     results: list[CrawlResult] = []
     name = str(target.get("name") or "").strip()
     for issue in issues:
         collected: list[str] = []
-        for spec, content in fetched:
-            part_count = int(spec.get("count") or 0)
-            keywords = [str(k) for k in (spec.get("keywords") or []) if str(k).strip()]
-            label = str(spec.get("name") or spec.get("url") or "").strip() or "来源"
+        for keywords, part_count, label, content in fetched:
             collected.extend(
                 _numbers_from_source(content, issue, keywords, part_count, label)
             )
