@@ -4342,6 +4342,16 @@
         "first_issue_chain": true,
         "issue_position_window": 3
       }
+    },
+    {
+      "id": "kill5-0248",
+      "name": "四舅老六",
+      "url": "https://aeqedpab.mdmm1-vc5yk-xizckg.work:17488/topic/800898.html",
+      "region": "top",
+      "count": 5,
+      "source": { "kind": "decoded_script" },
+      "parse": { "keywords": ["绝杀五码"], "anchor": "作者:490474d.com", "decoded_anchor_only": "作者:490474d.com", "decoded_anchor_chunks": 2, "first_issue_chain": true, "issue_position_window": 3 }
     }
+
   ]
 }
