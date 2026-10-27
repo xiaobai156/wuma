@@ -77,7 +77,7 @@ class MergedSourcesTests(unittest.TestCase):
         """3+1 不足 5 码必须失败，不能凑数。"""
         with self.assertRaises(CrawlError) as ctx:
             self.run_with(content_b='300期【绝杀②码】13 开0000准\n')
-        self.assertIn('绝杀②码', str(ctx.exception))
+        self.assertIn('数量不符合', str(ctx.exception))
 
     def test_missing_issue_fails(self):
         with self.assertRaises(CrawlError) as ctx:
@@ -243,8 +243,57 @@ class MergedSourcesTests(unittest.TestCase):
 
     def test_dash_pair_after_chinese_kept(self):
         """中文紧贴的横线两码是号码，不能被日期规则剔掉。"""
-        results = self.run_with(content_b='300期【绝杀②码】12-13 开0000准\n')
+        results = self.run_with(content_b='300期绝杀②码12-13 开0000准\n')
         self.assertEqual(results[0].numbers[-2:], ['12', '13'])
+
+    def test_unjing_not_treated_as_pending(self):
+        """「未开奖」是号码已出、只是没开奖，不能当未发布。"""
+        results = self.run_with(
+            content_a='300期:绝杀三码【01.35.32】未开奖\n'
+        )
+        self.assertEqual(results[0].numbers[:3], ['01', '35', '32'])
+
+    def test_other_column_segment_skipped_not_failed(self):
+        """同期别栏目段落（有号码但不是本栏目）应跳过，不能让整站失败。"""
+        results = self.run_with(
+            content_a=(
+                '300期:杀三肖 41.42.43.44.45\n'
+                '300期:绝杀三码【01.35.32】开00准\n'
+            )
+        )
+        self.assertEqual(results[0].numbers[:3], ['01', '35', '32'])
+
+    def test_other_column_digits_not_stripped_as_keyword(self):
+        """别栏目的「16尾」不能被当关键词数字剔掉，否则会退化成借值。"""
+        results = self.run_with(
+            content_a=(
+                '300期 杀尾 16尾 26尾\n'
+                '300期:绝杀三码【04.05.06】开00准\n'
+            )
+        )
+        self.assertEqual(results[0].numbers[:3], ['04', '05', '06'])
+
+    def test_short_window_wrap_not_borrowed(self):
+        """每圈只展示近 10 期时，本圈没该期要失败，不能取上一圈的。"""
+        with self.assertRaises(CrawlError):
+            self.run_with(
+                content_a=(
+                    '299期:绝杀三码【21.22.23】开00准\n'
+                    '298期:绝杀三码【21.22.23】开00准\n'
+                    '300期:绝杀三码【44.45.46】开00准\n'
+                )
+            )
+
+    def test_multi_column_same_keyword_conflicts(self):
+        """多栏目同关键词但值不同，不能静默取第一栏。"""
+        lines = []
+        for column in range(4):
+            for value in range(300, 230, -1):
+                numbers = '01.02.03' if column == 0 else '11.12.13'
+                lines.append(f'{value}期 绝杀三码 {numbers}')
+        with self.assertRaises(CrawlError) as ctx:
+            self.run_with(content_a='\n'.join(lines))
+        self.assertIn('多个不同结果', str(ctx.exception))
 
 
 class MergedConfigTests(unittest.TestCase):

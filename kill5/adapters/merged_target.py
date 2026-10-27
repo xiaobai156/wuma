@@ -60,22 +60,26 @@ def _strip_date_like(segment: str) -> str:
     return text
 
 
-# 期号循环一周是 365。文档里期号从大到小排列，跨圈时会出现一次大幅向上跳
-# （如 292 → 365、1 → 365）。该位置之后出现的同期号属于上一圈，必须排除，
-# 否则本圈缺数据时会借上一圈的值。
-_WRAP_JUMP = 50
-
-
+# 跨圈判定：文档里期号先递减（本圈），跨圈后从 365 重新递减（上一圈）。
+# 因此「出现比当前见过的最大值还大的期号」就是跨圈点；多栏目页面的栏目重启
+# 只会回到同一个最大值（如 300），不会超过它，所以不会误判成跨圈。
+# 短窗口（每圈只展示近 10 期）跨圈跳幅可能只有 +9，也能识别。
 def _wrap_boundary(content: str) -> int:
-    """返回跨圈分界位置；找不到跨圈时返回文本长度（即整篇都算本圈）。"""
-    labels = re.finditer(r"(?<!\d)(\d{1,3})\s*期", content)
+    """返回跨圈分界位置；找不到跨圈时返回文本长度（整篇都算本圈）。"""
+    max_seen = 0
     previous = None
-    for match in labels:
+    descending = False
+    for match in re.finditer(r"(?<!\d)(\d{1,3})\s*期", content):
         value = int(match.group(1))
         if not 1 <= value <= 365:
             continue
-        if previous is not None and value - previous > _WRAP_JUMP:
+        if previous is not None and value < previous:
+            descending = True
+        # 只有确认列表是递减的（本圈特征），才把「超过历史最大值」当跨圈，
+        # 避免把升序排列的页面误判。
+        if previous is not None and descending and value > max_seen:
             return match.start()
+        max_seen = max(max_seen, value)
         previous = value
     return len(content)
 
@@ -260,11 +264,19 @@ def _pick_group(
     return picked[0]
 
 
-# 站方明确表示「本期还没发」的标记。出现这种标记说明本圈还没数据，
-# 后面段落里的号码必然是上一圈的历史记录，必须判失败而不是采用。
+# 站方明确表示「本期还没发」的标记。只收「未发布」语义的词：
+# 「未开奖」是号码已出、只是没开奖，不能算未发布；「暂无/待定」太泛，也不收。
 _PENDING_RE = re.compile(
-    r"待更新|未更新|待发布|未发布|暂无|敬请期待|尚未更新|暂未|待定|未开奖"
+    r"待更新|未更新|待发布|未发布|尚未更新|尚未发布|敬请期待|暂无数据|数据更新中"
 )
+
+
+def _segment_has_keyword(segment: str, keywords: list[str]) -> bool:
+    """段落里是否出现过本栏目关键词（按行判断，避免整段误判）。"""
+    for line in re.split(r"[\r\n]+", _strip_date_like(segment)):
+        if line.strip() and _line_has_keyword(line, keywords):
+            return True
+    return False
 
 
 def _numbers_from_source(
@@ -294,20 +306,25 @@ def _numbers_from_source(
             continue
         if not _segment_has_any_number(segment):
             continue
+        groups = _groups_for_issue(segment, keywords, expected)
+        if not groups:
+            if _segment_has_keyword(segment, keywords):
+                # 本栏目这一段有号码却凑不出合法组 → 数量异常，直接失败，
+                # 不能跳过，否则会落到上一圈的段落借值。
+                raise CrawlError(
+                    ErrorCode.POSITION_MISMATCH,
+                    f"{normalize_issue(issue)} 期在来源「{source_label}」的本栏目段落里"
+                    f"号码数量不符合 {expected} 个",
+                    stage="merged_numbers",
+                )
+            # 段里有号码但不是本栏目（多栏目页面的其他 tab），跳过继续找
+            continue
         if pending_at >= 0:
             raise CrawlError(
                 ErrorCode.POSITION_MISMATCH,
                 f"{normalize_issue(issue)} 期在来源「{source_label}」标记为未更新，"
                 f"后面的号码属上一圈，已停止避免跨期借值",
                 stage="merged_stale_cycle",
-            )
-        groups = _groups_for_issue(segment, keywords, expected)
-        if not groups:
-            raise CrawlError(
-                ErrorCode.POSITION_MISMATCH,
-                f"{normalize_issue(issue)} 期在来源「{source_label}」的段落里"
-                f"找不到本栏目（{'/'.join(keywords)}）的号码",
-                stage="merged_numbers",
             )
         value = _pick_group(groups, expected, issue, source_label)
         if value not in picked:
@@ -344,7 +361,9 @@ def _segment_has_any_number(segment: str) -> bool:
     without_issue = re.sub(r"(?<!\d)0?\d{2,4}\s*期", " ", cleaned)
     without_issue = re.sub(r"<[^>]+>", " ", without_issue)
     # 关键词里的数字（绝杀5码 的 5）不是号码，先剔掉再判断
-    without_issue = re.sub(r"[0-9一二三四五六七八九十]+\s*[肖码头尾波段]", " ", without_issue)
+    without_issue = re.sub(
+        r"(?:绝杀|杀)\s*[0-9一二三四五六七八九十]+\s*[码肖]", " ", without_issue
+    )
     return bool(re.search(r"(?<!\d)\d{1,2}(?!\d)", without_issue))
 
 
