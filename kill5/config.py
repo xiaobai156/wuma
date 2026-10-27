@@ -39,6 +39,7 @@ SOURCE_KINDS = {
     "user_page",
     "list_detail",
     "lottery_article",
+    "merged_sources",
 }
 V2_TARGET_FIELDS = {
     "id",
@@ -50,6 +51,7 @@ V2_TARGET_FIELDS = {
     "parse",
     "network",
     "disabled",
+    "merged",
 }
 SOURCE_FIELDS = {"kind"}
 PARSE_FIELDS = {
@@ -130,6 +132,8 @@ def flatten_v2_target(item: dict, index: int) -> dict:
     target.setdefault("issue_position_window", ISSUE_POSITION_WINDOW)
     if source["kind"] == "list_detail":
         target["list_detail"] = True
+    if source["kind"] == "merged_sources":
+        target["merged"] = item.get("merged")
     if item.get("disabled"):
         target["disabled"] = True
     return target
@@ -202,9 +206,56 @@ def load_targets(
                 )
         if not name:
             raise ValueError(f"targets.json 第 {index} 条缺少 name")
-        parsed_url = urlparse(url)
-        if not url or parsed_url.scheme not in {"http", "https"} or not parsed_url.netloc:
-            raise ValueError(f"targets.json 第 {index} 条缺少有效 http(s) url")
+        merged = item.get("merged")
+        is_merged = source_kind == "merged_sources"
+        if is_merged:
+            if not isinstance(merged, list) or len(merged) < 2:
+                raise ValueError(
+                    f"targets.json 第 {index} 条 {name} 的 merged 至少需要两个来源"
+                )
+            total = 0
+            for part_index, part in enumerate(merged, 1):
+                if not isinstance(part, dict):
+                    raise ValueError(
+                        f"targets.json 第 {index} 条 {name} 的 merged 第 {part_index} 段必须是对象"
+                    )
+                part_url = str(part.get("url") or "")
+                part_parsed = urlparse(part_url)
+                if (
+                    not part_url
+                    or part_parsed.scheme not in {"http", "https"}
+                    or not part_parsed.netloc
+                ):
+                    raise ValueError(
+                        f"targets.json 第 {index} 条 {name} 的 merged 第 {part_index} 段缺少有效 url"
+                    )
+                part_keywords = part.get("keywords")
+                if (
+                    not isinstance(part_keywords, list)
+                    or not part_keywords
+                    or not all(str(k).strip() for k in part_keywords)
+                ):
+                    raise ValueError(
+                        f"targets.json 第 {index} 条 {name} 的 merged 第 {part_index} 段缺少有效 keywords"
+                    )
+                part_count = part.get("count")
+                if not isinstance(part_count, int) or part_count <= 0:
+                    raise ValueError(
+                        f"targets.json 第 {index} 条 {name} 的 merged 第 {part_index} 段 count 必须是正整数"
+                    )
+                total += part_count
+            if isinstance(count, int) and count > 0 and total != count:
+                raise ValueError(
+                    f"targets.json 第 {index} 条 {name} 的 merged 各段数量之和 {total} 与 count {count} 不一致"
+                )
+        else:
+            if merged is not None:
+                raise ValueError(
+                    f"targets.json 第 {index} 条 {name} 只有 merged_sources 才能配置 merged"
+                )
+            parsed_url = urlparse(url)
+            if not url or parsed_url.scheme not in {"http", "https"} or not parsed_url.netloc:
+                raise ValueError(f"targets.json 第 {index} 条缺少有效 http(s) url")
         if not isinstance(keywords, list) or not keywords or not all(
             str(keyword).strip() for keyword in keywords
         ):

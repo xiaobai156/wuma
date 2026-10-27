@@ -28,10 +28,34 @@ from .adapters.dynamic_article import (
 )
 from .adapters.static_topic import render_static_page
 from .adapters.registry import adapter_kind, fetch_target_content
+from .adapters.merged_target import MERGED_KIND, crawl_merged_target
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DEBUG_DIR = PROJECT_ROOT / "debug_pages"
+
+
+def _crawl_merged(
+    target: dict,
+    issues: list[str],
+) -> tuple[list[CrawlResult], CrawlFailure | None]:
+    """合并来源站点的抓取入口：成功返回结果，失败返回 CrawlFailure。"""
+    name = preserve_configured_name(target.get("name") or "")
+    try:
+        results = crawl_merged_target(target, issues)
+    except CrawlError as exc:
+        return [], build_failure(
+            target,
+            name,
+            str(exc),
+            exc.code,
+            stage=exc.stage,
+            retryable=exc.retryable,
+            evidence=exc.evidence,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return [], failure_from_exception(target, name, exc, issues=issues)
+    return results, None
 
 
 def build_failure(
@@ -133,6 +157,10 @@ def _crawl_one(
     *,
     debug_dir: Path = DEFAULT_DEBUG_DIR,
 ) -> tuple[list[CrawlResult], CrawlFailure | None]:
+    # 合并来源站点走独立链路，完全不经过主解析/校验，避免影响其它站点。
+    if adapter_kind(target) == MERGED_KIND:
+        return _crawl_merged(target, issues)
+
     url = target["url"]
     configured_name = preserve_configured_name(target.get("name") or "")
     content = ""
