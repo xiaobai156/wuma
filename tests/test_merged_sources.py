@@ -201,15 +201,50 @@ class MergedSourcesTests(unittest.TestCase):
         self.assertIn('多个不同结果', str(ctx.exception))
 
     def test_later_wrapped_period_does_not_override(self):
-        """上一圈同期记录不能覆盖本圈值。"""
+        """有跨圈分界时，上一圈的同期记录不能覆盖本圈值。"""
         results = self.run_with(
             content_a=(
                 '300期:绝杀三码【01.35.32】开00准\n'
                 '299期:绝杀三码【01.23.24】开猴23错\n'
+                '298期:绝杀三码【11.12.13】开猴23错\n'
+                '365期:绝杀三码【21.22.23】开猴23错\n'
                 '300期:绝杀三码【04.05.06】开00准\n'
             )
         )
         self.assertEqual(results[0].numbers[:3], ['01', '35', '32'])
+
+    def test_same_issue_two_values_without_wrap_fails(self):
+        """没有跨圈分界时同期出现两个不同值，无法判断哪个是本圈，判冲突。"""
+        with self.assertRaises(CrawlError) as ctx:
+            self.run_with(
+                content_a=(
+                    '300期:绝杀三码【01.35.32】开00准\n'
+                    '299期:绝杀三码【01.23.24】开猴23错\n'
+                    '300期:绝杀三码【04.05.06】开00准\n'
+                )
+            )
+        self.assertIn('多个不同结果', str(ctx.exception))
+
+    def test_pending_marker_blocks_previous_cycle(self):
+        """本圈标「待更新」时，后面的号码属上一圈，必须失败。"""
+        with self.assertRaises(CrawlError) as ctx:
+            self.run_with(
+                content_b=(
+                    '300期【绝杀②码】待更新\n'
+                    '300期【绝杀②码】11.23 开虎40准\n'
+                )
+            )
+        self.assertIn('上一圈', str(ctx.exception))
+
+    def test_date_after_colon_stripped(self):
+        """日期紧跟在冒号后也要剔除（旧版只认中文/空白前）。"""
+        with self.assertRaises(CrawlError):
+            self.run_with(content_b='300期【绝杀②码】更新时间:10-27开0000准\n')
+
+    def test_dash_pair_after_chinese_kept(self):
+        """中文紧贴的横线两码是号码，不能被日期规则剔掉。"""
+        results = self.run_with(content_b='300期【绝杀②码】12-13 开0000准\n')
+        self.assertEqual(results[0].numbers[-2:], ['12', '13'])
 
 
 class MergedConfigTests(unittest.TestCase):

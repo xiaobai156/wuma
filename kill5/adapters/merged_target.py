@@ -32,26 +32,52 @@ from .merged_sources import _source_specs, crawl_merged_source
 
 MERGED_KIND = "merged_sources"
 
-# 日期/时间形态：2026-10-27、2026/10/27、2026年10月27日、10-27、19:41。
-# 用 (?<!\d)/(?!\d) 而不是 \b——\b 在中文旁不成立，「更新10-27」会漏剔。
-# 裸「月-日」只在**前面紧贴中文或行首/空白、且后面不是号码分隔符**时才算日期，
-# 这样 12-13（横线两码）、11-13-15（横线三码）不会被误剔。
-_DATE_LIKE_RE = re.compile(
+# 四位数年份：2026-10-27 / 2026/10/27 / 2026年10月27日。年份不可能是号码，永远剔。
+_YEAR_DATE_RE = re.compile(
     r"(?<!\d)\d{4}\s*[-/.年]\s*\d{1,2}\s*[-/.月]\s*\d{1,2}\s*日?"
-    r"|(?:(?<=[\u4e00-\u9fff])|(?<=^)|(?<=\s))"
+)
+# 时:分：19:41。冒号分隔，不可能是号码组，永远剔。
+_CLOCK_RE = re.compile(r"(?<!\d)(?:[01]?\d|2[0-3])\s*[:：]\s*[0-5]\d(?!\d)")
+# 裸「月-日」：只在**紧跟日期词**时才剔。没有日期词的 12-13、11-13-15、16-20
+# 是号码，必须保留，否则 2 码来源会被整组剔掉。
+_MONTH_DAY_RE = re.compile(
+    r"(?P<word>更新于|更新时间|更新日期|更新|日期|时间|发布于|发布时间|发布|"
+    r"开奖时间|开奖|最后更新|最后)\s*[:：]?\s*"
     r"(?:0?[1-9]|1[0-2])\s*[-/]\s*(?:0?[1-9]|[12]\d|3[01])"
     r"(?!\s*[-/]\s*\d)(?!\d)"
-    r"|(?<!\d)(?:[01]?\d|2[0-3])\s*[:：]\s*[0-5]\d(?!\d)"
 )
 
 
 def _strip_date_like(segment: str) -> str:
     """剔除日期/时间形态，避免 10-27、19:41 被当成号码。
 
-    只剔「四位数年份 / 合法月-日 / 时:分」；横线连写的号码组保留，
-    交给后续号码解析。
+    - 四位数年份、时:分 永远剔除（不可能是号码）；
+    - 裸「月-日」只在紧跟日期词时剔除，否则视为号码。
     """
-    return _DATE_LIKE_RE.sub(" ", segment)
+    text = _YEAR_DATE_RE.sub(" ", segment)
+    text = _CLOCK_RE.sub(" ", text)
+    text = _MONTH_DAY_RE.sub(lambda m: m.group("word"), text)
+    return text
+
+
+# 期号循环一周是 365。文档里期号从大到小排列，跨圈时会出现一次大幅向上跳
+# （如 292 → 365、1 → 365）。该位置之后出现的同期号属于上一圈，必须排除，
+# 否则本圈缺数据时会借上一圈的值。
+_WRAP_JUMP = 50
+
+
+def _wrap_boundary(content: str) -> int:
+    """返回跨圈分界位置；找不到跨圈时返回文本长度（即整篇都算本圈）。"""
+    labels = re.finditer(r"(?<!\d)(\d{1,3})\s*期", content)
+    previous = None
+    for match in labels:
+        value = int(match.group(1))
+        if not 1 <= value <= 365:
+            continue
+        if previous is not None and value - previous > _WRAP_JUMP:
+            return match.start()
+        previous = value
+    return len(content)
 
 
 def _issue_segments(content: str, issue: str) -> list[str]:
@@ -61,12 +87,14 @@ def _issue_segments(content: str, issue: str) -> list[str]:
     由上层按顺序判断。
     """
     normalized = normalize_issue(issue)
+    boundary = _wrap_boundary(content)
+    current_cycle = content[:boundary]
     pattern = re.compile(
         rf"(?<!\d)0?{re.escape(normalized)}\s*期(?P<body>.*?)"
         rf"(?={neighbor_issue_pattern(normalized)}|$)",
         re.S,
     )
-    segments = [m.group(0) for m in pattern.finditer(content)]
+    segments = [m.group(0) for m in pattern.finditer(current_cycle)]
     if not segments:
         raise CrawlError(
             ErrorCode.ISSUE_NOT_FOUND,
@@ -232,6 +260,13 @@ def _pick_group(
     return picked[0]
 
 
+# 站方明确表示「本期还没发」的标记。出现这种标记说明本圈还没数据，
+# 后面段落里的号码必然是上一圈的历史记录，必须判失败而不是采用。
+_PENDING_RE = re.compile(
+    r"待更新|未更新|待发布|未发布|暂无|敬请期待|尚未更新|暂未|待定|未开奖"
+)
+
+
 def _numbers_from_source(
     content: str,
     issue: str,
@@ -239,17 +274,33 @@ def _numbers_from_source(
     expected: int,
     source_label: str,
 ) -> list[str]:
-    """在单个来源里取本期号码。
+    """在单个来源里取本期号码，全程 fail-closed。
 
-    逐段落扫描，规则：
-    - 段落里**完全没有号码**（标题行之类）→ 跳过，无借值风险；
-    - 段落里**有号码** → 必须给出唯一合法组，否则直接失败。
-      绝不跳到后续段落，因为那可能是上一圈的历史记录（跨期借值）。
+    规则：
+    - 段落里完全没有号码（标题行）→ 跳过；
+    - 段落里出现「待更新/未发布」标记 → 本圈无数据，若之后又出现号码，
+      说明那是上一圈的，直接失败（跨圈借值）；
+    - 段落里有号码但取不到合法组 → 失败，不跳下一段；
+    - 多个段落给出不同结果 → 判冲突失败。
     """
     segments = _issue_segments(content, issue)
-    for segment in segments:
+    pending_at = -1
+    picked: list[list[str]] = []
+
+    for index, segment in enumerate(segments):
+        if _PENDING_RE.search(segment):
+            if pending_at < 0:
+                pending_at = index
+            continue
         if not _segment_has_any_number(segment):
             continue
+        if pending_at >= 0:
+            raise CrawlError(
+                ErrorCode.POSITION_MISMATCH,
+                f"{normalize_issue(issue)} 期在来源「{source_label}」标记为未更新，"
+                f"后面的号码属上一圈，已停止避免跨期借值",
+                stage="merged_stale_cycle",
+            )
         groups = _groups_for_issue(segment, keywords, expected)
         if not groups:
             raise CrawlError(
@@ -258,14 +309,26 @@ def _numbers_from_source(
                 f"找不到本栏目（{'/'.join(keywords)}）的号码",
                 stage="merged_numbers",
             )
-        return _pick_group(groups, expected, issue, source_label)
+        value = _pick_group(groups, expected, issue, source_label)
+        if value not in picked:
+            picked.append(value)
 
-    raise CrawlError(
-        ErrorCode.POSITION_MISMATCH,
-        f"{normalize_issue(issue)} 期在来源「{source_label}」中未取到 "
-        f"{expected} 个合法号码",
-        stage="merged_numbers",
-    )
+    if not picked:
+        raise CrawlError(
+            ErrorCode.POSITION_MISMATCH,
+            f"{normalize_issue(issue)} 期在来源「{source_label}」中未取到 "
+            f"{expected} 个合法号码",
+            stage="merged_numbers",
+        )
+    if len(picked) > 1:
+        preview = " | ".join(",".join(v) for v in picked[:5])
+        raise CrawlError(
+            ErrorCode.CANDIDATE_CONFLICT,
+            f"{normalize_issue(issue)} 期在来源「{source_label}」出现多个不同结果，"
+            f"已停止避免取错：{preview}",
+            stage="merged_conflict",
+        )
+    return picked[0]
 
 
 def _segment_has_any_number(segment: str) -> bool:
@@ -280,6 +343,8 @@ def _segment_has_any_number(segment: str) -> bool:
     # 去掉期号本身（如 300期 的 300），剩下的数字才算号码
     without_issue = re.sub(r"(?<!\d)0?\d{2,4}\s*期", " ", cleaned)
     without_issue = re.sub(r"<[^>]+>", " ", without_issue)
+    # 关键词里的数字（绝杀5码 的 5）不是号码，先剔掉再判断
+    without_issue = re.sub(r"[0-9一二三四五六七八九十]+\s*[肖码头尾波段]", " ", without_issue)
     return bool(re.search(r"(?<!\d)\d{1,2}(?!\d)", without_issue))
 
 
