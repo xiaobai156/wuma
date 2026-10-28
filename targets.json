@@ -2654,6 +2654,7 @@
       "id": "kill5-0143",
       "name": "砍杀五码",
       "url": "https://cdlmrp.etrum-l5k1c-wcasxz.work:16677/topic/440129.html",
+      "disabled": true,
       "region": "top",
       "count": 5,
       "source": {
