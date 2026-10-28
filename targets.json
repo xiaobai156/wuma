@@ -4392,6 +4392,15 @@
       "count": 5,
       "source": { "kind": "decoded_script" },
       "parse": { "keywords": ["稳杀5码", "稳杀五码"], "anchor": "我负子戴", "decoded_anchor_only": "我负子戴", "decoded_anchor_to_end": true, "first_issue_chain": true, "issue_position_window": 3 }
+    },
+    {
+      "id": "kill5-0253",
+      "name": "卢九",
+      "url": "https://ipigstaf.wkjlo-qzz04-xzvqwm.work:17477/topic/801564.html",
+      "region": "top",
+      "count": 5,
+      "source": { "kind": "decoded_script" },
+      "parse": { "keywords": ["绝杀五码"], "anchor": "期期绝杀五码", "decoded_anchor_only": "期期绝杀五码", "decoded_anchor_chunks": 1, "first_issue_chain": true, "issue_position_window": 3 }
     }
 
   ]
