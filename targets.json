@@ -4374,6 +4374,15 @@
       "count": 5,
       "source": { "kind": "decoded_script" },
       "parse": { "keywords": ["绝杀⑤码", "绝杀5码"], "anchor": "古色古香", "decoded_anchor_only": "古色古香", "decoded_anchor_chunks": 22, "first_issue_chain": true, "issue_position_window": 3 }
+    },
+    {
+      "id": "kill5-0251",
+      "name": "开张骏业",
+      "url": "https://4m6dz.uue65-rrbvl-gtagag.work/topic/524007.html",
+      "region": "top",
+      "count": 5,
+      "source": { "kind": "decoded_script" },
+      "parse": { "keywords": ["杀五码"], "anchor": "作者:开张骏业", "decoded_anchor_only": "作者:开张骏业", "decoded_anchor_chunks": 1, "first_issue_chain": true, "issue_position_window": 3 }
     }
 
   ]
