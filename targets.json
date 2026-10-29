@@ -4402,6 +4402,15 @@
       "count": 5,
       "source": { "kind": "decoded_script" },
       "parse": { "keywords": ["绝杀五码"], "anchor": "期期绝杀五码", "decoded_anchor_only": "期期绝杀五码", "decoded_anchor_chunks": 1, "first_issue_chain": true, "issue_position_window": 3 }
+    },
+    {
+      "id": "kill5-0254",
+      "name": "慕容空身",
+      "url": "https://mqebaaie.a27jg-gmmsd-rmulqy.cyou:17455/topic/453865.html",
+      "region": "top",
+      "count": 5,
+      "source": { "kind": "decoded_script" },
+      "parse": { "keywords": ["稳杀五码"], "anchor": "作者:慕容空身", "decoded_anchor_only": "作者:慕容空身", "decoded_anchor_chunks": 1, "first_issue_chain": true, "issue_position_window": 3 }
     }
 
   ]
