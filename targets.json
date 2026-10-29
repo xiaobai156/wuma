@@ -4411,6 +4411,15 @@
       "count": 5,
       "source": { "kind": "decoded_script" },
       "parse": { "keywords": ["稳杀五码"], "anchor": "作者:慕容空身", "decoded_anchor_only": "作者:慕容空身", "decoded_anchor_chunks": 1, "first_issue_chain": true, "issue_position_window": 3 }
+    },
+    {
+      "id": "kill5-0255",
+      "name": "发财小哥",
+      "url": "https://ivefekpa.i6n76-h1q8a-ptvscn.work:17466/topic/247448.html",
+      "region": "bottom",
+      "count": 4,
+      "source": { "kind": "decoded_script" },
+      "parse": { "keywords": ["杀4码"], "anchor": "发财小哥", "decoded_anchor_only": "发财小哥", "decoded_anchor_chunks": 31, "first_issue_chain": true }
     }
 
   ]

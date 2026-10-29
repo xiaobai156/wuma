@@ -28,6 +28,7 @@ CONFIG_REGIONS = {
 BASHU_URL = "https://zcphjs.ce83x-ms2rz-orwude.work:12277/#/users/116164"
 GONGZHU_URL = "http://www.2018512.com/read.php?tid=15&fpage=1&page=3"
 GONGZHU_NAMES = {"公主上", "公主下"}
+FACAI_URL = "https://ivefekpa.i6n76-h1q8a-ptvscn.work:17466/topic/247448.html"
 INSECURE_TLS_TARGET = (
     "倦鸟归林",
     "https://nlafoq9v.dh5565656.xyz/bbs/topic.php?id=918",
@@ -378,12 +379,24 @@ def load_targets(
             and region in {"bottom", "lower", "tail", "last", "下", "尾部", "底部"}
             and source_kind == "static_topic"
         )
+        is_facai_exception = (
+            name == "发财小哥"
+            and url == FACAI_URL
+            and count == 4
+            and any(
+                "杀4码" in str(keyword).replace("碼", "码")
+                for keyword in keywords
+            )
+            and region in {"bottom", "lower", "tail", "last", "下", "尾部", "底部"}
+        )
         if stats_max_row:
             if count is not None:
                 raise ValueError(
                     f"targets.json 第 {index} 条 {name} 的 stats_max_row=true 时 count 必须为 null（号码个数可变）"
                 )
-        elif count != 5 and not (is_bashu_exception or is_gongzhu_exception):
+        elif count != 5 and not (
+            is_bashu_exception or is_gongzhu_exception or is_facai_exception
+        ):
             raise ValueError(
                 f"targets.json 第 {index} 条 {name} 的 count 必须固定为 5；仅允许已配置的特例"
             )
