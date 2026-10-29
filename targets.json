@@ -3891,8 +3891,17 @@
       "url": "https://6609960827.115646.xyz/bbs/topic.php?id=20775",
       "region": "bottom",
       "count": 5,
-      "source": { "kind": "static_topic" },
-      "parse": { "keywords": ["绝杀五码"], "anchor": "任重道远", "first_issue_chain": true, "issue_position_window": 3 }
+      "source": {
+        "kind": "static_topic"
+      },
+      "parse": {
+        "keywords": [
+          "绝杀五码"
+        ],
+        "anchor": "任重道远",
+        "first_issue_chain": true,
+        "issue_position_window": 3
+      }
     },
     {
       "id": "kill5-0210",
@@ -3901,8 +3910,17 @@
       "url": "https://0130190827.673454.xyz/bbs/topic.php?id=20148",
       "region": "bottom",
       "count": 5,
-      "source": { "kind": "static_topic" },
-      "parse": { "keywords": ["绝杀五码"], "anchor": "天下富甲", "first_issue_chain": true, "issue_position_window": 3 }
+      "source": {
+        "kind": "static_topic"
+      },
+      "parse": {
+        "keywords": [
+          "绝杀五码"
+        ],
+        "anchor": "天下富甲",
+        "first_issue_chain": true,
+        "issue_position_window": 3
+      }
     },
     {
       "id": "kill5-0211",
@@ -3910,8 +3928,17 @@
       "url": "https://0130190827.673454.xyz/bbs/topic.php?id=20238",
       "region": "bottom",
       "count": 5,
-      "source": { "kind": "static_topic" },
-      "parse": { "keywords": ["绝杀⑤码"], "anchor": "六合专家", "first_issue_chain": true, "issue_position_window": 3 }
+      "source": {
+        "kind": "static_topic"
+      },
+      "parse": {
+        "keywords": [
+          "绝杀⑤码"
+        ],
+        "anchor": "六合专家",
+        "first_issue_chain": true,
+        "issue_position_window": 3
+      }
     },
     {
       "id": "kill5-0212",
@@ -3919,8 +3946,17 @@
       "url": "https://12388990827.794555.xyz/bbs/topic.php?id=20100",
       "region": "bottom",
       "count": 5,
-      "source": { "kind": "static_topic" },
-      "parse": { "keywords": ["绝杀五码"], "anchor": "心中有数", "first_issue_chain": true, "issue_position_window": 3 }
+      "source": {
+        "kind": "static_topic"
+      },
+      "parse": {
+        "keywords": [
+          "绝杀五码"
+        ],
+        "anchor": "心中有数",
+        "first_issue_chain": true,
+        "issue_position_window": 3
+      }
     },
     {
       "id": "kill5-0213",
@@ -3928,8 +3964,17 @@
       "url": "https://12388990827.794555.xyz/bbs/topic.php?id=19969",
       "region": "bottom",
       "count": 5,
-      "source": { "kind": "static_topic" },
-      "parse": { "keywords": ["绝杀⑤码"], "anchor": "人强马壮", "first_issue_chain": true, "issue_position_window": 3 }
+      "source": {
+        "kind": "static_topic"
+      },
+      "parse": {
+        "keywords": [
+          "绝杀⑤码"
+        ],
+        "anchor": "人强马壮",
+        "first_issue_chain": true,
+        "issue_position_window": 3
+      }
     },
     {
       "id": "kill5-0214",
@@ -3937,8 +3982,17 @@
       "url": "https://0085680827.326455.xyz/bbs/topic.php?id=19186",
       "region": "bottom",
       "count": 5,
-      "source": { "kind": "static_topic" },
-      "parse": { "keywords": ["绝杀五码"], "anchor": "舞文弄墨", "first_issue_chain": true, "issue_position_window": 3 }
+      "source": {
+        "kind": "static_topic"
+      },
+      "parse": {
+        "keywords": [
+          "绝杀五码"
+        ],
+        "anchor": "舞文弄墨",
+        "first_issue_chain": true,
+        "issue_position_window": 3
+      }
     },
     {
       "id": "kill5-0215",
@@ -3947,17 +4001,36 @@
       "url": "https://12388990827.688756.xyz/bbs/topic.php?id=19936",
       "region": "bottom",
       "count": 5,
-      "source": { "kind": "static_topic" },
-      "parse": { "keywords": ["绝杀五码"], "anchor": "内部公式", "first_issue_chain": true, "issue_position_window": 3 }
+      "source": {
+        "kind": "static_topic"
+      },
+      "parse": {
+        "keywords": [
+          "绝杀五码"
+        ],
+        "anchor": "内部公式",
+        "first_issue_chain": true,
+        "issue_position_window": 3
+      }
     },
     {
       "id": "kill5-0216",
       "name": "史无前例",
+      "disabled": true,
       "url": "https://12388990827.688756.xyz/bbs/topic.php?id=19174",
       "region": "bottom",
       "count": 5,
-      "source": { "kind": "static_topic" },
-      "parse": { "keywords": ["绝杀⑤码"], "anchor": "史无前例", "first_issue_chain": true, "issue_position_window": 3 }
+      "source": {
+        "kind": "static_topic"
+      },
+      "parse": {
+        "keywords": [
+          "绝杀⑤码"
+        ],
+        "anchor": "史无前例",
+        "first_issue_chain": true,
+        "issue_position_window": 3
+      }
     },
     {
       "id": "kill5-0217",
@@ -3965,8 +4038,17 @@
       "url": "https://11889900827.435458.xyz/bbs/topic.php?id=19466",
       "region": "bottom",
       "count": 5,
-      "source": { "kind": "static_topic" },
-      "parse": { "keywords": ["绝杀五码"], "anchor": "北极星空", "first_issue_chain": true, "issue_position_window": 3 }
+      "source": {
+        "kind": "static_topic"
+      },
+      "parse": {
+        "keywords": [
+          "绝杀五码"
+        ],
+        "anchor": "北极星空",
+        "first_issue_chain": true,
+        "issue_position_window": 3
+      }
     },
     {
       "id": "kill5-0218",
@@ -3974,8 +4056,17 @@
       "url": "https://11008880827.876657.xyz/bbs/topic.php?id=19722",
       "region": "bottom",
       "count": 5,
-      "source": { "kind": "static_topic" },
-      "parse": { "keywords": ["绝杀五码"], "anchor": "世纪星王", "first_issue_chain": true, "issue_position_window": 3 }
+      "source": {
+        "kind": "static_topic"
+      },
+      "parse": {
+        "keywords": [
+          "绝杀五码"
+        ],
+        "anchor": "世纪星王",
+        "first_issue_chain": true,
+        "issue_position_window": 3
+      }
     },
     {
       "id": "kill5-0219",
@@ -3983,8 +4074,17 @@
       "url": "https://11008880827.456732.xyz/bbs/topic.php?id=19505",
       "region": "bottom",
       "count": 5,
-      "source": { "kind": "static_topic" },
-      "parse": { "keywords": ["绝杀⑤码"], "anchor": "莺歌燕舞", "first_issue_chain": true, "issue_position_window": 3 }
+      "source": {
+        "kind": "static_topic"
+      },
+      "parse": {
+        "keywords": [
+          "绝杀⑤码"
+        ],
+        "anchor": "莺歌燕舞",
+        "first_issue_chain": true,
+        "issue_position_window": 3
+      }
     },
     {
       "id": "kill5-0220",
@@ -3993,8 +4093,17 @@
       "url": "https://0130190827.767566.xyz/bbs/topic.php?id=29315",
       "region": "bottom",
       "count": 5,
-      "source": { "kind": "static_topic" },
-      "parse": { "keywords": ["绝杀⑤码"], "anchor": "金蝉脱壳", "first_issue_chain": true, "issue_position_window": 3 }
+      "source": {
+        "kind": "static_topic"
+      },
+      "parse": {
+        "keywords": [
+          "绝杀⑤码"
+        ],
+        "anchor": "金蝉脱壳",
+        "first_issue_chain": true,
+        "issue_position_window": 3
+      }
     },
     {
       "id": "kill5-0221",
@@ -4002,8 +4111,17 @@
       "url": "https://0130190827.987860.xyz/bbs/topic.php?id=19389",
       "region": "bottom",
       "count": 5,
-      "source": { "kind": "static_topic" },
-      "parse": { "keywords": ["绝杀⑤码"], "anchor": "百里之才", "first_issue_chain": true, "issue_position_window": 3 }
+      "source": {
+        "kind": "static_topic"
+      },
+      "parse": {
+        "keywords": [
+          "绝杀⑤码"
+        ],
+        "anchor": "百里之才",
+        "first_issue_chain": true,
+        "issue_position_window": 3
+      }
     },
     {
       "id": "kill5-0222",
@@ -4011,8 +4129,17 @@
       "url": "https://67806780827.234535.xyz/bbs/topic.php?id=20383",
       "region": "bottom",
       "count": 5,
-      "source": { "kind": "static_topic" },
-      "parse": { "keywords": ["绝杀五码"], "anchor": "福师大神", "first_issue_chain": true, "issue_position_window": 3 }
+      "source": {
+        "kind": "static_topic"
+      },
+      "parse": {
+        "keywords": [
+          "绝杀五码"
+        ],
+        "anchor": "福师大神",
+        "first_issue_chain": true,
+        "issue_position_window": 3
+      }
     },
     {
       "id": "kill5-0223",
@@ -4021,8 +4148,17 @@
       "url": "https://67806780827.234535.xyz/bbs/topic.php?id=19518",
       "region": "bottom",
       "count": 5,
-      "source": { "kind": "static_topic" },
-      "parse": { "keywords": ["绝杀⑤码"], "anchor": "共谋六合", "first_issue_chain": true, "issue_position_window": 3 }
+      "source": {
+        "kind": "static_topic"
+      },
+      "parse": {
+        "keywords": [
+          "绝杀⑤码"
+        ],
+        "anchor": "共谋六合",
+        "first_issue_chain": true,
+        "issue_position_window": 3
+      }
     },
     {
       "id": "kill5-0224",
@@ -4031,8 +4167,17 @@
       "url": "https://67806780827.978754.xyz/bbs/topic.php?id=18557",
       "region": "bottom",
       "count": 5,
-      "source": { "kind": "static_topic" },
-      "parse": { "keywords": ["绝杀五码"], "anchor": "王者无敌", "first_issue_chain": true, "issue_position_window": 3 }
+      "source": {
+        "kind": "static_topic"
+      },
+      "parse": {
+        "keywords": [
+          "绝杀五码"
+        ],
+        "anchor": "王者无敌",
+        "first_issue_chain": true,
+        "issue_position_window": 3
+      }
     },
     {
       "id": "kill5-0225",
@@ -4041,8 +4186,17 @@
       "url": "https://88888020827.833567.xyz/bbs/topic.php?id=21792",
       "region": "bottom",
       "count": 5,
-      "source": { "kind": "static_topic" },
-      "parse": { "keywords": ["绝杀五码"], "anchor": "特码赌神", "first_issue_chain": true, "issue_position_window": 3 }
+      "source": {
+        "kind": "static_topic"
+      },
+      "parse": {
+        "keywords": [
+          "绝杀五码"
+        ],
+        "anchor": "特码赌神",
+        "first_issue_chain": true,
+        "issue_position_window": 3
+      }
     },
     {
       "id": "kill5-0226",
@@ -4051,8 +4205,17 @@
       "url": "https://88888020827.833567.xyz/bbs/topic.php?id=19830",
       "region": "bottom",
       "count": 5,
-      "source": { "kind": "static_topic" },
-      "parse": { "keywords": ["绝杀五码"], "anchor": "美梦成真", "first_issue_chain": true, "issue_position_window": 3 }
+      "source": {
+        "kind": "static_topic"
+      },
+      "parse": {
+        "keywords": [
+          "绝杀五码"
+        ],
+        "anchor": "美梦成真",
+        "first_issue_chain": true,
+        "issue_position_window": 3
+      }
     },
     {
       "id": "kill5-0227",
@@ -4061,8 +4224,17 @@
       "url": "https://88888020827.897657.xyz/bbs/topic.php?id=18564",
       "region": "bottom",
       "count": 5,
-      "source": { "kind": "static_topic" },
-      "parse": { "keywords": ["绝杀五码"], "anchor": "快马加鞭", "first_issue_chain": true, "issue_position_window": 3 }
+      "source": {
+        "kind": "static_topic"
+      },
+      "parse": {
+        "keywords": [
+          "绝杀五码"
+        ],
+        "anchor": "快马加鞭",
+        "first_issue_chain": true,
+        "issue_position_window": 3
+      }
     },
     {
       "id": "kill5-0228",
@@ -4071,8 +4243,17 @@
       "url": "https://88888020827.897657.xyz/bbs/topic.php?id=20206",
       "region": "bottom",
       "count": 5,
-      "source": { "kind": "static_topic" },
-      "parse": { "keywords": ["绝杀⑤码"], "anchor": "开基立业", "first_issue_chain": true, "issue_position_window": 3 }
+      "source": {
+        "kind": "static_topic"
+      },
+      "parse": {
+        "keywords": [
+          "绝杀⑤码"
+        ],
+        "anchor": "开基立业",
+        "first_issue_chain": true,
+        "issue_position_window": 3
+      }
     },
     {
       "id": "kill5-0229",
@@ -4081,8 +4262,17 @@
       "url": "https://88888020827.897657.xyz/bbs/topic.php?id=20211",
       "region": "bottom",
       "count": 5,
-      "source": { "kind": "static_topic" },
-      "parse": { "keywords": ["绝杀⑤码"], "anchor": "实话实说", "first_issue_chain": true, "issue_position_window": 3 }
+      "source": {
+        "kind": "static_topic"
+      },
+      "parse": {
+        "keywords": [
+          "绝杀⑤码"
+        ],
+        "anchor": "实话实说",
+        "first_issue_chain": true,
+        "issue_position_window": 3
+      }
     },
     {
       "id": "kill5-0230",
@@ -4090,8 +4280,17 @@
       "url": "https://88888020827.997595.xyz/bbs/topic.php?id=19486",
       "region": "bottom",
       "count": 5,
-      "source": { "kind": "static_topic" },
-      "parse": { "keywords": ["绝杀五码"], "anchor": "树大根深", "first_issue_chain": true, "issue_position_window": 3 }
+      "source": {
+        "kind": "static_topic"
+      },
+      "parse": {
+        "keywords": [
+          "绝杀五码"
+        ],
+        "anchor": "树大根深",
+        "first_issue_chain": true,
+        "issue_position_window": 3
+      }
     },
     {
       "id": "kill5-0231",
@@ -4099,8 +4298,17 @@
       "url": "https://0130190827.657954.xyz/bbs/topic.php?id=20205",
       "region": "bottom",
       "count": 5,
-      "source": { "kind": "static_topic" },
-      "parse": { "keywords": ["绝杀五码"], "anchor": "涛涛江水", "first_issue_chain": true, "issue_position_window": 3 }
+      "source": {
+        "kind": "static_topic"
+      },
+      "parse": {
+        "keywords": [
+          "绝杀五码"
+        ],
+        "anchor": "涛涛江水",
+        "first_issue_chain": true,
+        "issue_position_window": 3
+      }
     },
     {
       "id": "kill5-0232",
@@ -4108,8 +4316,17 @@
       "url": "https://66778800827.909776.xyz/bbs/topic.php?id=18609",
       "region": "bottom",
       "count": 5,
-      "source": { "kind": "static_topic" },
-      "parse": { "keywords": ["绝杀五码"], "anchor": "音容宛在", "first_issue_chain": true, "issue_position_window": 3 }
+      "source": {
+        "kind": "static_topic"
+      },
+      "parse": {
+        "keywords": [
+          "绝杀五码"
+        ],
+        "anchor": "音容宛在",
+        "first_issue_chain": true,
+        "issue_position_window": 3
+      }
     },
     {
       "id": "kill5-0233",
@@ -4117,9 +4334,13 @@
       "url": "https://pnyldyj.f5fm8-8nbq9-turdho.work:17455/topic/805232.html",
       "region": "top",
       "count": 5,
-      "source": { "kind": "decoded_script" },
+      "source": {
+        "kind": "decoded_script"
+      },
       "parse": {
-        "keywords": ["绝杀五码"],
+        "keywords": [
+          "绝杀五码"
+        ],
         "anchor": "桃花杀手",
         "decoded_anchor_only": "桃花杀手",
         "decoded_anchor_chunks": 2,
@@ -4133,9 +4354,13 @@
       "url": "https://uifesgo.1szw5-owiw3-hyunhb.work:17466/topic/766002.html",
       "region": "top",
       "count": 5,
-      "source": { "kind": "decoded_script" },
+      "source": {
+        "kind": "decoded_script"
+      },
       "parse": {
-        "keywords": ["绝杀五码"],
+        "keywords": [
+          "绝杀五码"
+        ],
         "anchor": "温馨提示:为了提高网速，部分连错期数记录已删除",
         "decoded_anchor_only": "温馨提示:为了提高网速，部分连错期数记录已删除",
         "decoded_anchor_chunks": 2,
@@ -4149,9 +4374,13 @@
       "url": "https://jtrmhar.cwdc3-r5vqn-qzqasa.work:17455/topic/741195.html",
       "region": "top",
       "count": 5,
-      "source": { "kind": "decoded_script" },
+      "source": {
+        "kind": "decoded_script"
+      },
       "parse": {
-        "keywords": ["绝杀5码"],
+        "keywords": [
+          "绝杀5码"
+        ],
         "anchor": "匪我思存 发表于",
         "decoded_anchor_only": "匪我思存 发表于",
         "decoded_anchor_chunks": 3,
@@ -4166,9 +4395,13 @@
       "url": "https://bbs02.341627.cyou/bbs/topic.php?id=18037",
       "region": "bottom",
       "count": 5,
-      "source": { "kind": "static_topic" },
+      "source": {
+        "kind": "static_topic"
+      },
       "parse": {
-        "keywords": ["绝杀5码"],
+        "keywords": [
+          "绝杀5码"
+        ],
         "anchor": "作者:六合内部",
         "first_issue_chain": true,
         "issue_position_window": 3
@@ -4181,9 +4414,13 @@
       "url": "https://bbs06.933558.vip/bbs/topic.php?id=16128",
       "region": "bottom",
       "count": 5,
-      "source": { "kind": "static_topic" },
+      "source": {
+        "kind": "static_topic"
+      },
       "parse": {
-        "keywords": ["绝杀5码"],
+        "keywords": [
+          "绝杀5码"
+        ],
         "anchor": "作者:彩民救星",
         "first_issue_chain": true,
         "issue_position_window": 3
@@ -4195,9 +4432,13 @@
       "url": "https://taodixtm.g34t2-yj1bv-aznosu.work:17477/topic/283005.html",
       "region": "bottom",
       "count": 5,
-      "source": { "kind": "decoded_script" },
+      "source": {
+        "kind": "decoded_script"
+      },
       "parse": {
-        "keywords": ["绝杀五码"],
+        "keywords": [
+          "绝杀五码"
+        ],
         "anchor": "始于足下 发表于",
         "decoded_anchor_only": "始于足下 发表于",
         "decoded_anchor_to_end": true,
@@ -4211,9 +4452,13 @@
       "url": "https://ynwgqbeh.9tera-ex4gv-agdfws.cyou:17466/topic/371420.html",
       "region": "top",
       "count": 5,
-      "source": { "kind": "decoded_script" },
+      "source": {
+        "kind": "decoded_script"
+      },
       "parse": {
-        "keywords": ["必杀五码"],
+        "keywords": [
+          "必杀五码"
+        ],
         "anchor": "作者:秋色宜人",
         "decoded_anchor_only": "作者:秋色宜人",
         "decoded_anchor_chunks": 2,
@@ -4227,9 +4472,13 @@
       "url": "https://yxxeuvic.s7zfu-f3ymk-shmtnv.cyou:17477/topic/453983.html",
       "region": "top",
       "count": 5,
-      "source": { "kind": "decoded_script" },
+      "source": {
+        "kind": "decoded_script"
+      },
       "parse": {
-        "keywords": ["绝杀五码"],
+        "keywords": [
+          "绝杀五码"
+        ],
         "anchor": "作者:冬暖夏凉",
         "decoded_anchor_only": "作者:冬暖夏凉",
         "decoded_anchor_chunks": 2,
@@ -4243,9 +4492,13 @@
       "url": "https://igzsdnmg.b8dwh-jbi7g-pdseaa.work:17455/topic/479499.html",
       "region": "top",
       "count": 5,
-      "source": { "kind": "decoded_script" },
+      "source": {
+        "kind": "decoded_script"
+      },
       "parse": {
-        "keywords": ["绝杀5码"],
+        "keywords": [
+          "绝杀5码"
+        ],
         "anchor": "作者:局天促地",
         "decoded_anchor_only": "作者:局天促地",
         "decoded_anchor_chunks": 2,
@@ -4259,9 +4512,13 @@
       "url": "https://ekffkfbz.xc6tu-fd6li-xjpdkj.work:17455/topic/236232.html",
       "region": "top",
       "count": 5,
-      "source": { "kind": "decoded_script" },
+      "source": {
+        "kind": "decoded_script"
+      },
       "parse": {
-        "keywords": ["绝杀五码"],
+        "keywords": [
+          "绝杀五码"
+        ],
         "anchor": "作者:无拘无缚",
         "decoded_anchor_only": "作者:无拘无缚",
         "decoded_anchor_chunks": 2,
@@ -4275,12 +4532,21 @@
       "url": "https://www.jx438.com/index.php?fid=3",
       "region": "bottom",
       "count": null,
-      "source": { "kind": "list_detail" },
+      "source": {
+        "kind": "list_detail"
+      },
       "parse": {
-        "keywords": ["上错统计"],
-        "list_title_keywords": ["上错统计"],
+        "keywords": [
+          "上错统计"
+        ],
+        "list_title_keywords": [
+          "上错统计"
+        ],
         "stats_max_row": true,
-        "stats_block_keywords": ["新澳门", "上错杀五码统计"]
+        "stats_block_keywords": [
+          "新澳门",
+          "上错杀五码统计"
+        ]
       }
     },
     {
@@ -4289,14 +4555,20 @@
       "url": "http://www.2018512.com/read.php?tid=15&fpage=1&page=3",
       "region": "bottom",
       "count": 3,
-      "source": { "kind": "static_topic" },
+      "source": {
+        "kind": "static_topic"
+      },
       "parse": {
-        "keywords": ["依然公主尽位杀码"],
+        "keywords": [
+          "依然公主尽位杀码"
+        ],
         "anchor": "依然公主尽位杀码",
         "stop_anchor": "依然公主首位杀码",
         "issue_position_window": 3
       },
-      "network": { "encoding": "gb18030" }
+      "network": {
+        "encoding": "gb18030"
+      }
     },
     {
       "id": "kill5-0245",
@@ -4304,13 +4576,19 @@
       "url": "http://www.2018512.com/read.php?tid=15&fpage=1&page=3",
       "region": "bottom",
       "count": 3,
-      "source": { "kind": "static_topic" },
+      "source": {
+        "kind": "static_topic"
+      },
       "parse": {
-        "keywords": ["依然公主首位杀码"],
+        "keywords": [
+          "依然公主首位杀码"
+        ],
         "anchor": "依然公主首位杀码",
         "issue_position_window": 3
       },
-      "network": { "encoding": "gb18030" }
+      "network": {
+        "encoding": "gb18030"
+      }
     },
     {
       "id": "kill5-0246",
@@ -4318,9 +4596,13 @@
       "url": "https://qpdddzt.1pii1-a6yng-eudfwb.cyou:17477/topic/207075.html",
       "region": "bottom",
       "count": 5,
-      "source": { "kind": "decoded_script" },
+      "source": {
+        "kind": "decoded_script"
+      },
       "parse": {
-        "keywords": ["绝杀五码"],
+        "keywords": [
+          "绝杀五码"
+        ],
         "anchor": "作者:寝食不安",
         "decoded_anchor_only": "作者:寝食不安",
         "decoded_anchor_to_end": true,
@@ -4334,9 +4616,13 @@
       "url": "https://drwxuj.02eli-zt6ko-oeolgq.cyou:17455/topic/799952.html",
       "region": "top",
       "count": 5,
-      "source": { "kind": "decoded_script" },
+      "source": {
+        "kind": "decoded_script"
+      },
       "parse": {
-        "keywords": ["绝杀五码"],
+        "keywords": [
+          "绝杀五码"
+        ],
         "anchor": "作者:民不聊生",
         "decoded_anchor_only": "作者:民不聊生",
         "decoded_anchor_chunks": 2,
@@ -4350,8 +4636,19 @@
       "url": "https://aeqedpab.mdmm1-vc5yk-xizckg.work:17488/topic/800898.html",
       "region": "top",
       "count": 5,
-      "source": { "kind": "decoded_script" },
-      "parse": { "keywords": ["绝杀五码"], "anchor": "作者:490474", "decoded_anchor_only": "作者:490474", "decoded_anchor_chunks": 2, "first_issue_chain": true, "issue_position_window": 3 }
+      "source": {
+        "kind": "decoded_script"
+      },
+      "parse": {
+        "keywords": [
+          "绝杀五码"
+        ],
+        "anchor": "作者:490474",
+        "decoded_anchor_only": "作者:490474",
+        "decoded_anchor_chunks": 2,
+        "first_issue_chain": true,
+        "issue_position_window": 3
+      }
     },
     {
       "id": "kill5-0249",
@@ -4359,11 +4656,32 @@
       "url": "https://xclswmh.5nsui-oluq4-qsrxws.work:17455/topic/250930.html",
       "region": "top",
       "count": 5,
-      "source": { "kind": "merged_sources" },
-      "parse": { "keywords": ["绝杀三码"], "anchor": "作者:朱唇玉面" },
+      "source": {
+        "kind": "merged_sources"
+      },
+      "parse": {
+        "keywords": [
+          "绝杀三码"
+        ],
+        "anchor": "作者:朱唇玉面"
+      },
       "merged": [
-        { "url": "https://xclswmh.5nsui-oluq4-qsrxws.work:17455/topic/250930.html", "keywords": ["绝杀三码"], "count": 3, "name": "朱唇玉面" },
-        { "url": "https://rjjqrtfz.9kn5c-1jxv0-lkuxob.work/topic/764779.html", "keywords": ["绝杀②码"], "count": 2, "name": "老鼠报" }
+        {
+          "url": "https://xclswmh.5nsui-oluq4-qsrxws.work:17455/topic/250930.html",
+          "keywords": [
+            "绝杀三码"
+          ],
+          "count": 3,
+          "name": "朱唇玉面"
+        },
+        {
+          "url": "https://rjjqrtfz.9kn5c-1jxv0-lkuxob.work/topic/764779.html",
+          "keywords": [
+            "绝杀②码"
+          ],
+          "count": 2,
+          "name": "老鼠报"
+        }
       ]
     },
     {
@@ -4372,8 +4690,20 @@
       "url": "https://ghegvfr.5n8r1-kurkd-esielp.cyou:17455/",
       "region": "top",
       "count": 5,
-      "source": { "kind": "decoded_script" },
-      "parse": { "keywords": ["绝杀⑤码", "绝杀5码"], "anchor": "古色古香", "decoded_anchor_only": "古色古香", "decoded_anchor_chunks": 26, "first_issue_chain": true, "issue_position_window": 3 }
+      "source": {
+        "kind": "decoded_script"
+      },
+      "parse": {
+        "keywords": [
+          "绝杀⑤码",
+          "绝杀5码"
+        ],
+        "anchor": "古色古香",
+        "decoded_anchor_only": "古色古香",
+        "decoded_anchor_chunks": 26,
+        "first_issue_chain": true,
+        "issue_position_window": 3
+      }
     },
     {
       "id": "kill5-0251",
@@ -4381,8 +4711,19 @@
       "url": "https://4m6dz.uue65-rrbvl-gtagag.work/topic/524007.html",
       "region": "top",
       "count": 5,
-      "source": { "kind": "decoded_script" },
-      "parse": { "keywords": ["杀五码"], "anchor": "作者:开张骏业", "decoded_anchor_only": "作者:开张骏业", "decoded_anchor_chunks": 1, "first_issue_chain": true, "issue_position_window": 3 }
+      "source": {
+        "kind": "decoded_script"
+      },
+      "parse": {
+        "keywords": [
+          "杀五码"
+        ],
+        "anchor": "作者:开张骏业",
+        "decoded_anchor_only": "作者:开张骏业",
+        "decoded_anchor_chunks": 1,
+        "first_issue_chain": true,
+        "issue_position_window": 3
+      }
     },
     {
       "id": "kill5-0252",
@@ -4390,8 +4731,20 @@
       "url": "https://mqebaaie.a27jg-gmmsd-rmulqy.cyou:17455/topic/226263.html",
       "region": "bottom",
       "count": 5,
-      "source": { "kind": "decoded_script" },
-      "parse": { "keywords": ["稳杀5码", "稳杀五码"], "anchor": "我负子戴", "decoded_anchor_only": "我负子戴", "decoded_anchor_chunks": 31, "first_issue_chain": true, "issue_position_window": 3 }
+      "source": {
+        "kind": "decoded_script"
+      },
+      "parse": {
+        "keywords": [
+          "稳杀5码",
+          "稳杀五码"
+        ],
+        "anchor": "我负子戴",
+        "decoded_anchor_only": "我负子戴",
+        "decoded_anchor_chunks": 31,
+        "first_issue_chain": true,
+        "issue_position_window": 3
+      }
     },
     {
       "id": "kill5-0253",
@@ -4399,9 +4752,19 @@
       "url": "https://ipigstaf.wkjlo-qzz04-xzvqwm.work:17477/topic/801564.html",
       "region": "top",
       "count": 5,
-      "source": { "kind": "decoded_script" },
-      "parse": { "keywords": ["绝杀五码"], "anchor": "期期绝杀五码", "decoded_anchor_only": "期期绝杀五码", "decoded_anchor_chunks": 1, "first_issue_chain": true, "issue_position_window": 3 }
+      "source": {
+        "kind": "decoded_script"
+      },
+      "parse": {
+        "keywords": [
+          "绝杀五码"
+        ],
+        "anchor": "期期绝杀五码",
+        "decoded_anchor_only": "期期绝杀五码",
+        "decoded_anchor_chunks": 1,
+        "first_issue_chain": true,
+        "issue_position_window": 3
+      }
     }
-
   ]
 }
