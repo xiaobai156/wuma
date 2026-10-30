@@ -3869,6 +3869,7 @@
     {
       "id": "kill5-0208",
       "name": "休声美誉",
+      "disabled": true,
       "url": "https://i97lk4jb16.333741bbs1.shop/bbs/topic.php?id=2779",
       "region": "bottom",
       "count": 5,
