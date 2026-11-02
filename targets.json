@@ -850,8 +850,7 @@
     {
       "id": "kill5-0044",
       "name": "大才槃槃",
-      "disabled": true,
-      "url": "https://yioznkua.snfqn-48psf-vctwsw.xyz:16677/topic/220089.html",
+      "url": "https://dgcjhmtb.q1vbd-j70tm-hqmvhz.work:17455/topic/220089.html",
       "region": "top",
       "count": 5,
       "source": {
@@ -3982,6 +3981,7 @@
     {
       "id": "kill5-0219",
       "name": "莺歌燕舞",
+      "disabled": true,
       "url": "https://11008880827.456732.xyz/bbs/topic.php?id=19505",
       "region": "bottom",
       "count": 5,
@@ -4393,7 +4393,7 @@
       "region": "bottom",
       "count": 5,
       "source": { "kind": "decoded_script" },
-      "parse": { "keywords": ["稳杀5码", "稳杀五码"], "anchor": "我负子戴", "decoded_anchor_only": "我负子戴", "decoded_anchor_chunks": 31, "first_issue_chain": true, "issue_position_window": 3 }
+      "parse": { "keywords": ["稳杀5码", "稳杀五码"], "anchor": "我负子戴", "decoded_anchor_only": "我负子戴", "decoded_anchor_chunks": 41, "first_issue_chain": true, "issue_position_window": 3 }
     },
     {
       "id": "kill5-0253",
@@ -4420,7 +4420,7 @@
       "region": "bottom",
       "count": 4,
       "source": { "kind": "decoded_script" },
-      "parse": { "keywords": ["杀4码"], "anchor": "发财小哥", "decoded_anchor_only": "发财小哥", "decoded_anchor_chunks": 31, "first_issue_chain": true ,
+      "parse": { "keywords": ["杀4码"], "anchor": "发财小哥", "decoded_anchor_only": "发财小哥", "decoded_anchor_chunks": 31, "first_issue_chain": true },
       "network": { "rendered_fallback_selectors": [".cgi-body"] }
     }
 
