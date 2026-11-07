@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import re
+import time
 
 from .errors import CrawlError, ErrorCode
 from .parser import (
@@ -28,6 +29,11 @@ from .parser import (
 class IssueMismatch:
     message: str
     error_code: ErrorCode
+
+
+# 失败诊断只用于写“本页同栏目找到哪些期”，在超大用户页上逐期重扫会退化到十几分钟；
+# 给一个硬预算，到点即停，返回已找到的部分。成功取数不受影响。
+DETECT_AVAILABLE_TIME_BUDGET = 10.0
 
 def issue_candidates_for_validation(
     text: str,
@@ -310,7 +316,12 @@ def diagnose_issue_mismatch(
             messages.append("找到该期和关键词，但没有识别到号码组")
             error_codes.add(ErrorCode.NUMBER_INVALID)
         elif skipped_by_window and not region_candidates:
-            messages.append(f"找到该期候选，但不在配置位置 {normalized_region or '未配置'} 最新 {issue_position_window} 条同栏目内")
+            if allowed_window_starts is not None and not allowed_window_starts:
+                messages.append(
+                    "本期没有任何可识别的号码组（位置窗口为空），不是被 top/bottom 窗口排除"
+                )
+            else:
+                messages.append(f"找到该期候选，但不在配置位置 {normalized_region or '未配置'} 最新 {issue_position_window} 条同栏目内")
             error_codes.add(ErrorCode.POSITION_MISMATCH)
         elif region_candidates:
             strict_region = needs_strict_region_window(region_candidates)
@@ -361,7 +372,15 @@ def detect_available_issues(
     first_issue_chain: bool = False,
     keyword_before_issue: bool = False,
     keyword_before_issue_window: int | None = None,
+    time_budget: float | None = None,
 ) -> list[str]:
+    """列出本页同栏目能取到号码的期数，只用于失败原因文字。
+
+    ``time_budget``：在超大页面（用户页一次返回整页历史）上逐个期号完整重扫
+    会退化到十几分钟，只影响失败诊断、不影响成功取数；给出预算后到点即停，
+    返回已找到的部分。
+    """
+    started = time.monotonic()
     text = html_to_text(text)
     text = scope_text_by_anchor(text, anchor, stop_anchor)
     candidates = unique_keep_order(
@@ -370,6 +389,8 @@ def detect_available_issues(
     )
     available = []
     for issue in candidates:
+        if time_budget is not None and time.monotonic() - started >= time_budget:
+            break
         found = extract_issue_numbers(
             text,
             [issue],

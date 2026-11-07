@@ -17,6 +17,7 @@ from .documents import (
 from .network import request_scope, target_deadline
 from .parser import normalize_issue, preserve_configured_name, stats_max_row_numbers
 from .validator import (
+    DETECT_AVAILABLE_TIME_BUDGET,
     detect_available_issues,
     diagnose_issue_mismatch,
     extract_issue_numbers,
@@ -420,6 +421,7 @@ def _crawl_one(
                 first_issue_chain=target.get("first_issue_chain", False),
                 keyword_before_issue=target.get("keyword_before_issue", False),
                 keyword_before_issue_window=target.get("keyword_before_issue_window"),
+                time_budget=DETECT_AVAILABLE_TIME_BUDGET,
             )
             wanted = ",".join(f"{issue}期" for issue in missing_issues)
             found_issues = [issue for issue in issues if issue in issue_map]

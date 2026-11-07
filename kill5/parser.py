@@ -17,7 +17,8 @@ USER_RECORD_BOUNDARY = "[[USER_RECORD_BOUNDARY]]"
 DOCUMENT_BOUNDARY = "[[DOCUMENT_BOUNDARY]]"
 OTHER_DATA_COLUMN_PATTERN = re.compile(
     r"(?:(?:稳杀|绝杀|精杀|砍杀|杀码|必杀|杀号|综合杀)"
-    r"(?:五码|5码|六码|6码)?|五码|5码|六码|6码|三肖|一肖|六肖|波色|尾数)"
+    r"(?:五码|5码|六码|6码)?|五码|5码|六码|6码|三肖|一肖|六肖|波色|尾数"
+    r"|开奖号码|开奖结果)"
 )
 
 
@@ -132,10 +133,12 @@ def valid_number(token: str) -> bool:
 
 DRAW_MARKER_RE = re.compile(
     # 只认真正的开奖标记，避免「已公开」「开奖」这类含「开」的普通词：
+    # 0) 显式开奖栏目：开奖号码 / 开奖结果（带不带冒号都算）
     # 1) 「开」后面紧跟冒号：开: 开：
     # 2) 「开」后面紧跟开奖内容：开龙02准 / 开 0000准 / 开??准
     # 3) 「开」+空格+号码：开 13 24 35 46 07（但「已公开 05」不算）
-    r"(?<![公奖始展场盘])[=＝]?\s*开\s*"
+    r"(?:开奖号码|开奖结果)\s*[:：]?"
+    r"|(?<![公奖始展场盘])[=＝]?\s*开\s*"
     r"(?:[:：]|(?=(?:[鼠牛虎兔龙蛇马羊猴鸡狗猪]|[0０]{2,4}|[?？]{1,4}))|(?=\s+\d))"
 )
 
@@ -168,7 +171,54 @@ def _tail_has_kill_numbers(tail: str) -> bool:
     return bool(re.search(r"\d{2}", remainder))
 
 
+_YEAR_DATE_RE = re.compile(
+    # 四位数年份日期：2026-10-27 / 2026/10/27 / 2026年10月27日。年份不可能是号码。
+    r"(?<!\d)\d{4}\s*[-/.年]\s*\d{1,2}\s*[-/.月]\s*\d{1,2}\s*日?"
+)
+_CLOCK_RE = re.compile(
+    # 时:分：19:41。冒号分隔，不可能是号码组。
+    r"(?<!\d)(?:[01]?\d|2[0-3])\s*[:：]\s*[0-5]\d(?!\d)"
+)
+_DATE_WORD_RE = re.compile(
+    # 裸「月-日」只在紧跟日期词时剔除；没有日期词的 11-15、16-20 是号码。
+    r"(?P<word>更新于|更新时间|更新日期|更新|日期|时间|发布于|发布时间|发布|"
+    r"开奖时间|最后更新|最后|截止)\s*[:：]?\s*"
+    r"(?:0?[1-9]|1[0-2])\s*[-/]\s*(?:0?[1-9]|[12]\d|3[01])"
+    r"(?!\s*[-/]\s*\d)(?!\d)"
+)
+
+
+def strip_date_time_like(value: str) -> str:
+    """剔除日期/时间形态，避免「更新时间 10-14」「19:41」被当成号码或号码区间。
+
+    与 merged_sources 的同类剔除保持一致：四位年份、时:分 永远剔除；
+    裸「月-日」只在紧跟日期词时剔除，避免误伤 11-15、16-20 这类真实号码。
+    """
+    text = _YEAR_DATE_RE.sub(" ", value or "")
+    text = _CLOCK_RE.sub(" ", text)
+    text = _DATE_WORD_RE.sub(lambda match: match.group("word"), text)
+    return text
+
+
+_NUMBER_ONLY_REMAINDER_RE = re.compile(r"[\d\s.,，。、;；|/\\\-]+")
+
+
+def is_number_only_line(line: str) -> bool:
+    """续行是否只由号码和分隔符组成。
+
+    关键词行之后的续行只允许纯号码行（开奖标记及其后内容先剔除）。
+    方括号、装饰符（[] 【】 〓 等 Unicode 标点/符号）不算文字，否则
+    「[05.15.27.29.41]」「〓37.34.41.47.39〓」这类正常排版会被误判成非纯号码行。
+    「下期预测 06 07 08 09 10」「更新时间 10-14」这类带文字（汉字/字母）的行
+    一律不许把号码带进本期候选。
+    """
+    head = DRAW_MARKER_RE.split(line or "", maxsplit=1)[0]
+    remainder = _NUMBER_ONLY_REMAINDER_RE.sub("", head).strip()
+    return all(unicodedata.category(char)[0] in {"P", "S"} for char in remainder)
+
+
 def find_number_groups(segment: str) -> list[list[str]]:
+    segment = strip_date_time_like(segment)
     before_open, after_open = _split_at_draw(segment)
     before_open = before_open.replace("杀", " ")
 
@@ -291,6 +341,9 @@ def keyword_scoped_number_groups(
 
     for line_index in keyword_lines:
         scoped_lines = [lines[line_index]]
+        # 关键词行本身已经出现号码组时不再向后续行借数：本行凑不满 count 就判失败，
+        # 避免把下一行的「下期预测」「开奖号码」当成本期杀码。
+        keyword_line_has_numbers = bool(find_number_groups(lines[line_index]))
         for next_index in range(line_index + 1, len(lines)):
             line = lines[next_index]
             compact = normalize_keyword(line)
@@ -299,6 +352,8 @@ def keyword_scoped_number_groups(
             if DOCUMENT_BOUNDARY in line or USER_RECORD_BOUNDARY in line:
                 break
             if OTHER_DATA_COLUMN_PATTERN.search(compact):
+                break
+            if keyword_line_has_numbers or not is_number_only_line(line):
                 break
             scoped_lines.append(line)
 
